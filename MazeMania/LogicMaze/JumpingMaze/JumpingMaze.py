@@ -46,16 +46,20 @@ class MazeLayout:
 
 class Movement:
 	# NORTH, SOUTH, WEST, EAST
-	horizontalMovementDelta = {
+	horizontalOrVerticalMovementDelta = {
 	'n' : (-1, 0), 's' : (1, 0), 'w' : (0, -1), 'e' : (0, 1)
 	}
-	horizontalMoves = set( horizontalMovementDelta.keys() )
+	horizontalOrVerticalMoves = set( horizontalOrVerticalMovementDelta.keys() )
 
 	# NORTH WEST, NORTH EAST, SOUTH WEST, SOUTH EAST
 	diagonalMovementDelta = {
 	'nw': (-1, -1), 'ne': (-1, 1), 'sw': (1, -1), 'se': (1,  1)
 	}
 	diagonalMoves = set( diagonalMovementDelta.keys() )
+
+	oppositeDirectionDict = {
+	'n' : 's', 's' : 'n', 'e' : 'w', 'w' : 'e'
+	}
 
 class JumpingMaze:
 	def __init__( self, mazeLayout, mazeName=None ):
@@ -64,7 +68,7 @@ class JumpingMaze:
 		self.mazeName = mazeName
 
 		self.startCell, self.targetCell = (0, 0), (self.rows - 1, self.cols - 1)
-		self.movementDelta = Movement.horizontalMovementDelta
+		self.movementDelta = Movement.horizontalOrVerticalMovementDelta
 
 	def __repr__( self ):
 		return '{}:{} {} x {}'.format( self.__class__.__name__, self.mazeName, self.rows, self.cols )
@@ -152,24 +156,25 @@ class JumpingMazeDiagonal( JumpingMaze ):
 		self.movementDelta.update( Movement.diagonalMovementDelta )
 
 	def _moveType( self, move ):
-		return 'HORIZONTAL' if move in Movement.horizontalMoves else 'DIAGONAL'
+		return 'HORIZONTAL_OR_VERTICLE' if move in Movement.horizontalOrVerticalMoves else 'DIAGONAL'
 
 	def _flipMoveType( self, moveType ):
-		return 'DIAGONAL' if moveType == 'HORIZONTAL' else 'HORIZONTAL'
+		return 'DIAGONAL' if moveType == 'HORIZONTAL_OR_VERTICLE' else 'HORIZONTAL_OR_VERTICLE'
 
 	def _allowedMoves( self, moveType ):
-		return Movement.horizontalMoves if moveType == 'HORIZONTAL' else Movement.diagonalMoves
+		return Movement.horizontalOrVerticalMoves if moveType == 'HORIZONTAL_OR_VERTICLE' else \
+		       Movement.diagonalMoves
 
 class JumpingMazeSwitchDiagonal( JumpingMazeDiagonal ):
 	def __init__( self, mazeLayout, mazeName=None ):
 		JumpingMazeDiagonal.__init__( self, mazeLayout, mazeName )
 
 	def _getCacheEntryFromState( self, cell, previousMove ):
-		return (cell, self._moveType( previousMove ) == 'HORIZONTAL')
+		return (cell, self._moveType( previousMove ) == 'HORIZONTAL_OR_VERTICLE')
 
 	def _getAllowedMoves( self, currentCell, stepCount, previousMove ):
 		if previousMove is None:
-			return Movement.horizontalMoves
+			return Movement.horizontalOrVerticalMoves
 		else:
 			return self._allowedMoves( self._flipMoveType( self._moveType( previousMove ) ) )
 
@@ -180,18 +185,30 @@ class JumpingMazeToggleDirection( JumpingMazeDiagonal ):
 		self.circleCellProperty = 'C'
 
 	def _getCacheEntryFromState( self, cell, perviousMove ):
-		return (cell, self._moveType( perviousMove ) == 'HORIZONTAL' )
+		return (cell, self._moveType( perviousMove ) == 'HORIZONTAL_OR_VERTICLE' )
 
 	def _getAllowedMoves( self, currentCell, stepCount, previousMove ):
 		row, col = currentCell
 		propertyString = self.mazeLayout.getPropertyString( row, col )
 
 		if previousMove is None:
-			return Movement.horizontalMoves
+			return Movement.horizontalOrVerticalMoves
 		elif propertyString == self.circleCellProperty:
 			return self._allowedMoves( self._flipMoveType( self._moveType( previousMove ) ) )
 		else:
 			return self._allowedMoves( self._moveType( previousMove ) )
+
+class JumpingMazeNoUTurn( JumpingMaze ):
+	def __init__( self, mazeLayout, mazeName=None ):
+		JumpingMaze.__init__( self, mazeLayout, mazeName )
+
+	def _getCacheEntryFromState( self, cell, previousMove ):
+		return (cell, previousMove)
+
+	def _getAllowedMoves( self, currentCell, stepCount, previousMove ):
+		if previousMove is None:
+			return Movement.horizontalOrVerticalMoves
+		return set.difference( Movement.horizontalOrVerticalMoves, [ Movement.oppositeDirectionDict[ previousMove ] ] )
 
 class JumpingMazeTest( unittest.TestCase ):
 	def _verifyMaze( self, maze ):
@@ -225,6 +242,9 @@ class JumpingMazeTest( unittest.TestCase ):
 
 		for mazeName in ('Twangle', 'Triangle', 'Tangle', 'Switchblade', 'Megaminx'):
 			self._verifyMaze( JumpingMazeToggleDirection( readMazeFromFile( mazeName ), mazeName=mazeName ) )
+
+		for mazeName in ('Reflex', 'Noun'):
+			self._verifyMaze( JumpingMazeNoUTurn( readMazeFromFile( mazeName ), mazeName=mazeName ) )
 
 if __name__ == '__main__':
 	unittest.main()
