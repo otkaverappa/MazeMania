@@ -103,10 +103,44 @@ class SearchState:
 	def isTargetCell( self, targetCell ):
 		return self.cell == targetCell
 
+class StateSpaceSearch:
+	def getAdjacentStateList( self, currentState ):
+		raise NotImplementedError()
+
+	def getCacheEntryFromSearchState( self, initialState ):
+		raise NotImplementedError()
+
+	def getStartState( self ):
+		raise NotImplementedError()
+
+	def isTargetState( self, currentState ):
+		raise NotImplementedError()
+
+	def breadthFirstSearch( self ):
+		initialState = self.getStartState()
+
+		q = deque()
+		q.append( initialState )
+
+		visited = set()
+		visited.add( self.getCacheEntryFromSearchState( initialState ) )
+
+		while len( q ) > 0:
+			currentState = q.popleft()
+			if self.isTargetState( currentState ):
+				return currentState
+			
+			for adjacentState in self.getAdjacentStateList( currentState ):
+				cacheEntry = self.getCacheEntryFromSearchState( adjacentState )
+				if cacheEntry not in visited:
+					visited.add( cacheEntry )
+					q.append( adjacentState )
+		return None
+
 class UseDefaultImplementation( Exception ):
 	pass
 
-class JumpingMaze:
+class JumpingMaze( StateSpaceSearch ):
 	def __init__( self, mazeLayout, mazeName=None ):
 		self.rows, self.cols = mazeLayout.dimensions()
 		self.mazeLayout = mazeLayout
@@ -122,22 +156,22 @@ class JumpingMaze:
 		row, col = cell
 		return row < 0 or row >= self.rows or col < 0 or col >= self.cols
 
-	def _getAllowedMoves( self, currentState ):
+	def getAllowedMoves( self, currentState ):
 		return set( self.allowedMovementCodes.keys() )
 
 	def _defaultStepCount( self, currentState ):
 		row, col = currentState.cell
 		return self.mazeLayout.getWeight( row, col )
 
-	def _getStepCount( self, currentState ):
+	def getStepCount( self, currentState ):
 		return self._defaultStepCount( currentState )
 
-	def _getAdjacentStateList( self, currentState ):
+	def getAdjacentStateList( self, currentState ):
 		adjacentStateList = list()
 
-		allowedMoves = self._getAllowedMoves( currentState )
+		allowedMoves = self.getAllowedMoves( currentState )
 		try:
-			stepCount = self._getStepCount( currentState )
+			stepCount = self.getStepCount( currentState )
 		except UseDefaultImplementation:
 			stepCount = self._defaultStepCount( currentState )
 
@@ -163,29 +197,17 @@ class JumpingMaze:
 		if not self._isCellOutsideGrid( startCell ) and not self._isCellOutsideGrid( targetCell ):
 			self.startCell, self.targetCell = startCell, targetCell
 
-	def _getCacheEntryFromSearchState( self, searchState ):
+	def getCacheEntryFromSearchState( self, searchState ):
 		return searchState.cell
 
+	def getStartState( self ):
+		return SearchState( self.startCell, previousMove=None, previousState=None )
+
+	def isTargetState( self, currentState ):
+		return currentState.isTargetCell( self.targetCell )
+
 	def solve( self ):
-		initialState = SearchState( self.startCell, previousMove=None, previousState=None )
-
-		q = deque()
-		q.append( initialState )
-
-		visited = set()
-		visited.add( self._getCacheEntryFromSearchState( initialState ) )
-
-		while len( q ) > 0:
-			currentState = q.popleft()
-			if currentState.isTargetCell( self.targetCell ):
-				return currentState
-			
-			for adjacentState in self._getAdjacentStateList( currentState ):
-				cacheEntry = self._getCacheEntryFromSearchState( adjacentState )
-				if cacheEntry not in visited:
-					visited.add( cacheEntry )
-					q.append( adjacentState )
-		return None
+		return self.breadthFirstSearch()
 
 	def getPath( self, searchState ):
 		def cellNumber( cell ):
@@ -219,7 +241,7 @@ class JumpingMazeDiagonal( JumpingMaze ):
 		       Movement.diagonalMoves
 
 class SwitchMoveMixin:
-	def _getAllowedMoves( self, searchState ):
+	def getAllowedMoves( self, searchState ):
 		if searchState.previousMove is None:
 			return Movement.horizontalOrVerticalMoves
 		else:
@@ -228,7 +250,7 @@ class SwitchMoveMixin:
 class ToggleMoveMixin:
 	circleCellProperty = 'C'
 
-	def _getAllowedMoves( self, searchState ):
+	def getAllowedMoves( self, searchState ):
 		row, col = searchState.cell
 		propertyString = self.mazeLayout.getPropertyString( row, col )
 
@@ -240,7 +262,7 @@ class ToggleMoveMixin:
 			return self._allowedMoves( searchState.previousMove.moveType() )
 
 class CacheCellPositionMoveTypeMixin:
-	def _getCacheEntryFromSearchState( self, searchState ):
+	def getCacheEntryFromSearchState( self, searchState ):
 		previousMoveType = None
 		if searchState.previousMove is not None:
 			previousMoveType = searchState.previousMove.moveType()
@@ -253,19 +275,18 @@ class JumpingMazeSwitchDiagonal( SwitchMoveMixin, CacheCellPositionMoveTypeMixin
 class JumpingMazeToggleDirection( ToggleMoveMixin, CacheCellPositionMoveTypeMixin, JumpingMazeDiagonal ):
 	def __init__( self, mazeLayout, mazeName=None ):
 		JumpingMazeDiagonal.__init__( self, mazeLayout, mazeName )
-		self.circleCellProperty = 'C'
 
 class JumpingMazeNoUTurn( JumpingMaze ):
 	def __init__( self, mazeLayout, mazeName=None ):
 		JumpingMaze.__init__( self, mazeLayout, mazeName )
 
-	def _getCacheEntryFromSearchState( self, searchState ):
+	def getCacheEntryFromSearchState( self, searchState ):
 		moveCode = None
 		if searchState.previousMove is not None:
 			moveCode = searchState.previousMove.moveCode
 		return (searchState.cell, moveCode)
 
-	def _getAllowedMoves( self, searchState ):
+	def getAllowedMoves( self, searchState ):
 		if searchState.previousMove is None:
 			return Movement.horizontalOrVerticalMoves
 		moveCode = searchState.previousMove.moveCode
@@ -278,7 +299,7 @@ class WildCardMixin:
 		row, col = searchState.cell
 		return self.mazeLayout.getRaw( row, col ) == WildCardMixin.wildCardCell
 
-	def _getStepCount( self, currentState ):
+	def getStepCount( self, currentState ):
 		if self._isWildCardCell( currentState ):
 			return currentState.previousMove.moveDistance
 		raise UseDefaultImplementation()
@@ -287,14 +308,14 @@ class JumpingMazeWildcard( WildCardMixin, JumpingMaze ):
 	def __init__( self, mazeLayout, mazeName=None ):
 		JumpingMaze.__init__( self, mazeLayout, mazeName )
 
-	def _getCacheEntryFromSearchState( self, searchState ):
+	def getCacheEntryFromSearchState( self, searchState ):
 		previousMoveDistance = 0
 		if self._isWildCardCell( searchState ):
 			previousMoveDistance = searchState.previousMove.moveDistance
 		return (searchState.cell, previousMoveDistance)
 
 class CacheCellPositionMoveTypeMoveDistanceMixin:
-	def _getCacheEntryFromSearchState( self, searchState ):
+	def getCacheEntryFromSearchState( self, searchState ):
 		previousMoveType = None
 		if searchState.previousMove is not None:
 			previousMoveType = searchState.previousMove.moveType()
