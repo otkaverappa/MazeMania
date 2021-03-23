@@ -59,18 +59,18 @@ class MazeLayout:
 class Movement:
 	# NORTH, SOUTH, WEST, EAST
 	horizontalOrVerticalMovementCode = {
-	'n' : (-1, 0), 's' : (1, 0), 'w' : (0, -1), 'e' : (0, 1)
+	'N' : (-1, 0), 'S' : (1, 0), 'W' : (0, -1), 'E' : (0, 1)
 	}
 	horizontalOrVerticalMoves = set( horizontalOrVerticalMovementCode.keys() )
 
 	# NORTH WEST, NORTH EAST, SOUTH WEST, SOUTH EAST
 	diagonalMovementCode = {
-	'nw': (-1, -1), 'ne': (-1, 1), 'sw': (1, -1), 'se': (1,  1)
+	'NW': (-1, -1), 'NE': (-1, 1), 'SW': (1, -1), 'SE': (1,  1)
 	}
 	diagonalMoves = set( diagonalMovementCode.keys() )
 
 	oppositeDirectionDict = {
-	'n' : 's', 's' : 'n', 'e' : 'w', 'w' : 'e'
+	'N' : 'S', 'S' : 'N', 'E' : 'W', 'W' : 'E'
 	}
 
 class Move:
@@ -332,7 +332,7 @@ class JumpingMazeSwitchDiagonalWildcard( WildCardMixin, CacheCellPositionMoveTyp
 	def __init__( self, mazeLayout, mazeName=None ):
 		JumpingMazeSwitchDiagonal.__init__( self, mazeLayout, mazeName )
 
-class JumpingMazeTest( unittest.TestCase ):
+class MazeTest( unittest.TestCase ):
 	def _verifyMaze( self, maze ):
 		expectedPathList = readMazeSolutionFromFile( maze.getMazeName() )
 
@@ -345,7 +345,10 @@ class JumpingMazeTest( unittest.TestCase ):
 		self.assertEqual( pathList, expectedPathList )
 		print()
 
-	def test_solve( self ):
+	def test_ArrowMaze( self ):
+		pass
+
+	def test_JumpMaze( self ):
 		for mazeName in ('ChainReaction', 'Hopscotch'):
 			self._verifyMaze( JumpingMaze( readMazeFromFile( mazeName ), mazeName=mazeName ) )
 
