@@ -21,7 +21,7 @@ class MazeLayout:
 		self.mazeLayout = [ [ None for _ in range( self.cols ) ] for _ in range( self.rows ) ]
 		self.rawContentDict = dict()
 		self.propertyDict = dict()
-		self.specialTokens = set( '*' )
+		self.specialTokens = set( [ '*', 'N', 'S', 'E', 'W', 'NE', 'NW', 'SE', 'SW' ] )
 		self._process( rawMazeLayout )
 
 	def _process( self, rawMazeLayout ):
@@ -140,7 +140,7 @@ class StateSpaceSearch:
 class UseDefaultImplementation( Exception ):
 	pass
 
-class JumpingMaze( StateSpaceSearch ):
+class Maze:
 	def __init__( self, mazeLayout, mazeName=None ):
 		self.rows, self.cols = mazeLayout.dimensions()
 		self.mazeLayout = mazeLayout
@@ -152,9 +152,38 @@ class JumpingMaze( StateSpaceSearch ):
 	def __repr__( self ):
 		return '{}:{} {} x {}'.format( self.__class__.__name__, self.mazeName, self.rows, self.cols )
 
-	def _isCellOutsideGrid( self, cell ):
+	def isCellOutsideGrid( self, cell ):
 		row, col = cell
 		return row < 0 or row >= self.rows or col < 0 or col >= self.cols
+
+	def getDimensions( self ):
+		return self.rows, self.cols
+
+	def getMazeName( self ):
+		return self.mazeName
+
+	def getPath( self, searchState ):
+		def cellNumber( cell ):
+			row, col = cell
+			return row * self.cols + col + 1
+
+		pathStringList = list()
+		cellList = list()
+		
+		while searchState is not None:
+			if searchState.previousMove is not None:
+				pathStringList.append( searchState.previousMove.moveCode )
+			cellList.append( cellNumber( searchState.cell ) )
+			searchState = searchState.previousState
+
+		pathStringList.reverse()
+		cellList.reverse()
+		
+		return ' : '.join( pathStringList ), cellList
+
+class JumpingMaze( StateSpaceSearch, Maze ):
+	def __init__( self, mazeLayout, mazeName=None ):
+		Maze.__init__( self, mazeLayout, mazeName )
 
 	def getAllowedMoves( self, currentState ):
 		return set( self.allowedMovementCodes.keys() )
@@ -180,21 +209,15 @@ class JumpingMaze( StateSpaceSearch ):
 			if directionTag not in allowedMoves:
 				continue
 			adjacentCell = row + du * stepCount, col + dv * stepCount
-			if self._isCellOutsideGrid( adjacentCell ):
+			if self.isCellOutsideGrid( adjacentCell ):
 				continue
 			move = Move( moveCode=directionTag, moveDistance=stepCount )
 			newSearchState = SearchState( adjacentCell, previousMove=move, previousState=currentState )
 			adjacentStateList.append( newSearchState )
 		return adjacentStateList
 
-	def getDimensions( self ):
-		return self.rows, self.cols
-
-	def getMazeName( self ):
-		return self.mazeName
-
 	def setStartAndTargetCell( self, startCell, targetCell ):
-		if not self._isCellOutsideGrid( startCell ) and not self._isCellOutsideGrid( targetCell ):
+		if not self.isCellOutsideGrid( startCell ) and not self.isCellOutsideGrid( targetCell ):
 			self.startCell, self.targetCell = startCell, targetCell
 
 	def getCacheEntryFromSearchState( self, searchState ):
@@ -208,25 +231,6 @@ class JumpingMaze( StateSpaceSearch ):
 
 	def solve( self ):
 		return self.breadthFirstSearch()
-
-	def getPath( self, searchState ):
-		def cellNumber( cell ):
-			row, col = cell
-			return row * self.cols + col + 1
-
-		pathStringList = list()
-		cellList = list()
-		
-		while searchState is not None:
-			if searchState.previousMove is not None:
-				pathStringList.append( searchState.previousMove.moveCode )
-			cellList.append( cellNumber( searchState.cell ) )
-			searchState = searchState.previousState
-
-		pathStringList.reverse()
-		cellList.reverse()
-		
-		return ' : '.join( pathStringList ), cellList
 
 class JumpingMazeDiagonal( JumpingMaze ):
 	def __init__( self, mazeLayout, mazeName=None ):
@@ -332,6 +336,43 @@ class JumpingMazeSwitchDiagonalWildcard( WildCardMixin, CacheCellPositionMoveTyp
 	def __init__( self, mazeLayout, mazeName=None ):
 		JumpingMazeSwitchDiagonal.__init__( self, mazeLayout, mazeName )
 
+class ArrowMaze( StateSpaceSearch, Maze ):
+	def __init__( self, mazeLayout, mazeName=None ):
+		Maze.__init__( self, mazeLayout, mazeName )
+
+		self.arrowMovementCode = copy.deepcopy( Movement.horizontalOrVerticalMovementCode )
+		self.arrowMovementCode.update( Movement.diagonalMovementCode )
+
+	def getAdjacentStateList( self, currentState ):
+		adjacentStateList = list()
+
+		row, col = currentState.cell
+		moveCode = self.mazeLayout.getRaw( row, col )
+		du, dv = self.arrowMovementCode[ moveCode ] 
+		
+		distance = 1
+		while True:
+			adjacentCell = u, v = row + du * distance, col + dv * distance
+			if self.isCellOutsideGrid( adjacentCell ):
+				break
+			move = Move( moveCode=moveCode, moveDistance=distance )
+			newSearchState = SearchState( adjacentCell, previousMove=move, previousState=currentState )
+			adjacentStateList.append( newSearchState )
+			distance += 1
+		return adjacentStateList
+
+	def getCacheEntryFromSearchState( self, initialState ):
+		return initialState.cell
+
+	def getStartState( self ):
+		return SearchState( self.startCell, previousMove=None, previousState=None )
+
+	def isTargetState( self, currentState ):
+		return currentState.isTargetCell( self.targetCell )
+
+	def solve( self ):
+		return self.breadthFirstSearch()
+
 class MazeTest( unittest.TestCase ):
 	def _verifyMaze( self, maze ):
 		expectedPathList = readMazeSolutionFromFile( maze.getMazeName() )
@@ -346,7 +387,8 @@ class MazeTest( unittest.TestCase ):
 		print()
 
 	def test_ArrowMaze( self ):
-		pass
+		for mazeName in ('ArrowTheorem', ):
+			self._verifyMaze( ArrowMaze( readMazeFromFile( mazeName ), mazeName=mazeName ) )
 
 	def test_JumpMaze( self ):
 		for mazeName in ('ChainReaction', 'Hopscotch'):
