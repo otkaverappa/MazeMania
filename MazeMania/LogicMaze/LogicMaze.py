@@ -21,7 +21,9 @@ class MazeLayout:
 		self.mazeLayout = [ [ None for _ in range( self.cols ) ] for _ in range( self.rows ) ]
 		self.rawContentDict = dict()
 		self.propertyDict = dict()
-		self.specialTokens = set( [ '*', 'N', 'S', 'E', 'W', 'NE', 'NW', 'SE', 'SW' ] )
+		self.specialTokens = set( [ '*', '_', 'N', 'S', 'E', 'W', 'NE', 'NW', 'SE', 'SW' ] )
+		chessTokens = set( [ 'k', 'R', 'B', 'K' ] )
+		self.specialTokens = set.union( self.specialTokens, chessTokens )
 		self._process( rawMazeLayout )
 
 	def _process( self, rawMazeLayout ):
@@ -373,6 +375,71 @@ class ArrowMaze( StateSpaceSearch, Maze ):
 	def solve( self ):
 		return self.breadthFirstSearch()
 
+class ChessMaze( StateSpaceSearch, Maze ):
+	def __init__( self, mazeLayout, mazeName=None ):
+		Maze.__init__( self, mazeLayout, mazeName )
+
+		adjacentCellList = [ (0, 1), (0, -1), ( 1, 0), (-1,  0) ]
+		diagonalCellList = [ (1, 1), (1, -1), (-1, 1), (-1, -1) ]
+		
+		# k : Knight, R : Rook, B : Bishop, K : King
+		self.chessMovementCode = {
+		'k' : { 'unit' : None,   'cellList' : [ (1, 2), (1, -2), (2, 1), (2, -1), (-1, 2), (-1, -2), (-2, 1), (-2, -1) ] },
+		'R' : { 'unit' : str(),  'cellList' : adjacentCellList },
+		'B' : { 'unit' : str(),  'cellList' : diagonalCellList },
+		'K' : { 'unit' : None,   'cellList' : adjacentCellList + diagonalCellList }
+		}
+		self.emptyCell = '*'
+
+	def getAdjacentStateList( self, currentState ):
+		adjacentStateList = list()
+
+		row, col = currentState.cell
+		movementCodeDict = self.chessMovementCode[ self.mazeLayout.getRaw( row, col ) ]
+
+		unit = movementCodeDict[ 'unit' ]
+		cellDeltaList = movementCodeDict[ 'cellList' ]
+
+		exploreList = list()
+
+		for du, dv in cellDeltaList:
+			adjacentCell = u, v = row + du, col + dv
+			if self.isCellOutsideGrid( adjacentCell ):
+				continue
+			if self.mazeLayout.getRaw( u, v ) == self.emptyCell:
+				exploreList.append( (du, dv) )
+				continue
+			move = Move( moveCode=str(), moveDistance=None )
+			newSearchState = SearchState( adjacentCell, previousMove=move, previousState=currentState )
+			adjacentStateList.append( newSearchState )
+
+		if unit is not None:
+			for du, dv in exploreList:
+				u, v = row, col
+				while True:
+					adjacentCell = u, v = u + du, v + dv
+					if self.isCellOutsideGrid( adjacentCell ):
+						break
+					if self.mazeLayout.getRaw( u, v ) != self.emptyCell:
+						move = Move( moveCode=str(), moveDistance=None )
+						newSearchState = SearchState( adjacentCell, previousMove=move, previousState=currentState )
+						adjacentStateList.append( newSearchState )
+						break
+		
+		return adjacentStateList
+
+	def getCacheEntryFromSearchState( self, initialState ):
+		return initialState.cell
+
+	def getStartState( self ):
+		return SearchState( self.startCell, previousMove=None, previousState=None )
+
+	def isTargetState( self, currentState ):
+		return currentState.isTargetCell( self.targetCell )
+
+	def solve( self ):
+		return self.breadthFirstSearch()
+
 class MazeTest( unittest.TestCase ):
 	def _verifyMaze( self, maze ):
 		expectedPathList = readMazeSolutionFromFile( maze.getMazeName() )
@@ -385,6 +452,10 @@ class MazeTest( unittest.TestCase ):
 		print( 'Cell list: {}'.format( pathList ) )
 		self.assertEqual( pathList, expectedPathList )
 		print()
+
+	def test_ChessMaze( self ):
+		for mazeName in ('FourKings', 'Chess77'):
+			self._verifyMaze( ChessMaze( readMazeFromFile( mazeName ), mazeName=mazeName ) )
 
 	def test_ArrowMaze( self ):
 		for mazeName in ('ArrowTheorem', ):
