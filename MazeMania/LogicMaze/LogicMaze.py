@@ -220,7 +220,8 @@ class ChessMaze( StateSpaceSearch, Maze ):
 		'k' : { 'unit' : None,   'cellList' : [ (1, 2), (1, -2), (2, 1), (2, -1), (-1, 2), (-1, -2), (-2, 1), (-2, -1) ] },
 		'R' : { 'unit' : str(),  'cellList' : adjacentCellList },
 		'B' : { 'unit' : str(),  'cellList' : diagonalCellList },
-		'K' : { 'unit' : None,   'cellList' : adjacentCellList + diagonalCellList }
+		'K' : { 'unit' : None,   'cellList' : adjacentCellList + diagonalCellList },
+		'Q' : { 'unit' : str(),  'cellList' : adjacentCellList + diagonalCellList }
 		}
 		self.emptyCell = '*'
 
@@ -287,8 +288,11 @@ class MazeTest( unittest.TestCase ):
 		print()
 
 	def test_ChessMaze( self ):
-		for mazeName in ('FourKings', 'Chess77'):
+		for mazeName in ('FourKings', 'Chess77', 'BishopCastleKnight'):
 			self._verifyMaze( ChessMaze( readMazeFromFile( mazeName ), mazeName=mazeName ) )
+
+		for mazeName in ('ChessMoves', ):
+			pass
 
 	def test_ArrowMaze( self ):
 		for mazeName in ('ArrowTheorem', ):

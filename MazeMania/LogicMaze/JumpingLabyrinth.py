@@ -81,8 +81,8 @@ class JumpingLabyrinthTest( unittest.TestCase ):
 
 	def _render( self, mazeLayout, mazeName, pathString, pathLength ):
 		print( 'JumpingLabyrinth: mazeName = {}'.format( mazeName ) )
-		#for mazeRow in mazeLayout:
-		#	print( mazeRow )
+		for mazeRow in mazeLayout:
+			print( mazeRow )
 		prettyPathString = ''.join( map( lambda token : token.strip(), pathString.split( ':' ) ) )
 		print( 'Path : {} Length = {}'.format( prettyPathString, pathLength ) )
 		print()
