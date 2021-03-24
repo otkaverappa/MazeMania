@@ -5,13 +5,13 @@ import copy
 
 def readMazeFromFile( filename ):
 	rawMazeLayout = list()
-	with open( 'tests/{}'.format( filename ) ) as inputFile:
+	with open( 'tests/LogicMaze/{}'.format( filename ) ) as inputFile:
 		for inputLine in inputFile.readlines():
 			rawMazeLayout.append( list( inputLine.strip().split() ) )
 	return MazeLayout( rawMazeLayout )
 
 def readMazeSolutionFromFile( filename ):
-	with open( 'tests/{}.ans'.format( filename ) ) as solutionFile:
+	with open( 'tests/LogicMaze/{}.ans'.format( filename ) ) as solutionFile:
 		return list( map( int, solutionFile.readline().split() ) )
 
 class MazeLayout:
