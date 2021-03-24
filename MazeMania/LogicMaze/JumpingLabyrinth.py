@@ -1,8 +1,9 @@
 import unittest
-from StateSpaceSearch import (StateSpaceSearch, Maze, MazeLayout, SearchState, Movement, Move)
 import os
 from pathlib import Path
 import itertools
+
+from StateSpaceSearch import (StateSpaceSearch, Maze, MazeLayout, SearchState, Movement, Move)
 
 class JumpingLabyrinth( StateSpaceSearch, Maze ):
 	def __init__( self, mazeLayout, constraintList, mazeName=None ):
@@ -82,7 +83,8 @@ class JumpingLabyrinthTest( unittest.TestCase ):
 		print( 'JumpingLabyrinth: mazeName = {}'.format( mazeName ) )
 		#for mazeRow in mazeLayout:
 		#	print( mazeRow )
-		print( 'Path : {} Length = {}'.format( pathString, pathLength ) )
+		prettyPathString = ''.join( map( lambda token : token.strip(), pathString.split( ':' ) ) )
+		print( 'Path : {} Length = {}'.format( prettyPathString, pathLength ) )
 		print()
 
 	def _verify( self, testcaseFile, expectedSolutionDict ):
