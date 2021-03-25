@@ -1,22 +1,43 @@
 import itertools
 from collections import deque
 
-class MazeLayout:
+class BaseMazeInterface:
+	def __init__( self, rows, cols ):
+		self.rows, self.cols = rows, cols
+
+	def getDimensions( self ):
+		return self.rows, self.cols
+
+	def isCellOutsideGrid( self, cell ):
+		row, col = cell
+		return row < 0 or row >= self.rows or col < 0 or col >= self.cols
+
+	def getPath( self, searchState ):
+		def cellNumber( cell ):
+			row, col = cell
+			return row * self.cols + col + 1
+
+		pathStringList = list()
+		cellList = list()
+		
+		while searchState is not None:
+			if searchState.previousMove is not None:
+				pathStringList.append( searchState.previousMove.moveCode )
+			cellList.append( cellNumber( searchState.cell ) )
+			searchState = searchState.previousState
+
+		pathStringList.reverse()
+		cellList.reverse()
+		
+		return ' : '.join( pathStringList ), cellList
+
+class MazeLayout( BaseMazeInterface ):
 	def __init__( self, rawMazeLayout ):
-		self.rows, self.cols = len( rawMazeLayout ), len( rawMazeLayout[ 0 ] )
+		rows, cols = len( rawMazeLayout ), len( rawMazeLayout[ 0 ] )
+		BaseMazeInterface.__init__( self, rows, cols )
 		
 		self.mazeLayout = [ [ None for _ in range( self.cols ) ] for _ in range( self.rows ) ]
-		self.rawContentDict = dict()
 		self.propertyDict = dict()
-		
-		mazeTokens = set( [ '*', '_', '.', '#', 'S', 'T' ] )
-
-		# Knight, Rook, Bishop, King, Queen
-		chessTokens = set( [ 'k', 'R', 'B', 'K', 'Q' ] )
-		# North, South, East, West, NorthEast, NorthWest, SouthEast, SouthWest
-		directionTokens = set( [ 'N', 'S', 'E', 'W', 'NE', 'NW', 'SE', 'SW' ] )
-		
-		self.specialTokens = set.union( mazeTokens, chessTokens, directionTokens )
 		
 		self._process( rawMazeLayout )
 
@@ -24,33 +45,27 @@ class MazeLayout:
 		for row, col in itertools.product( range( self.rows ), range( self.cols ) ):
 			token = rawMazeLayout[ row ][ col ]
 			
-			cellWeight = 0
 			propertyString = None
 			
 			if ':' in token:
 				token, propertyString = token.split( ':' )
 			if propertyString is not None:
 				self.propertyDict[ (row, col) ] = propertyString
-			if token in self.specialTokens:
-				self.rawContentDict[ (row, col) ] = token
-			else:
-				cellWeight = int( token )
-			
-			self.mazeLayout[ row ][ col ] = cellWeight
+			self.mazeLayout[ row ][ col ] = token
 
 	def getRaw( self, row, col ):
-		if (row, col) in self.rawContentDict:
-			return self.rawContentDict[ (row, col) ]
 		return self.mazeLayout[ row ][ col ]
 
 	def getWeight( self, row, col ):
-		return self.mazeLayout[ row ][ col ]
+		weight = 0
+		try:
+			weight = int( self.mazeLayout[ row ][ col ] )
+		except:
+			pass
+		return weight
 
 	def getPropertyString( self, row, col ):
 		return self.propertyDict.get( (row, col) )
-
-	def dimensions( self ):
-		return self.rows, self.cols
 
 class Movement:
 	# NORTH, SOUTH, WEST, EAST
@@ -138,7 +153,7 @@ class UseDefaultImplementation( Exception ):
 
 class Maze:
 	def __init__( self, mazeLayout, mazeName=None ):
-		self.rows, self.cols = mazeLayout.dimensions()
+		self.rows, self.cols = mazeLayout.getDimensions()
 		self.mazeLayout = mazeLayout
 		self.mazeName = mazeName
 
@@ -149,30 +164,13 @@ class Maze:
 		return '{}:{} {} x {}'.format( self.__class__.__name__, self.mazeName, self.rows, self.cols )
 
 	def isCellOutsideGrid( self, cell ):
-		row, col = cell
-		return row < 0 or row >= self.rows or col < 0 or col >= self.cols
+		return self.mazeLayout.isCellOutsideGrid( cell )
 
 	def getDimensions( self ):
-		return self.rows, self.cols
+		return self.mazeLayout.getDimensions()
 
 	def getMazeName( self ):
 		return self.mazeName
 
 	def getPath( self, searchState ):
-		def cellNumber( cell ):
-			row, col = cell
-			return row * self.cols + col + 1
-
-		pathStringList = list()
-		cellList = list()
-		
-		while searchState is not None:
-			if searchState.previousMove is not None:
-				pathStringList.append( searchState.previousMove.moveCode )
-			cellList.append( cellNumber( searchState.cell ) )
-			searchState = searchState.previousState
-
-		pathStringList.reverse()
-		cellList.reverse()
-		
-		return ' : '.join( pathStringList ), cellList
+		return self.mazeLayout.getPath( searchState )

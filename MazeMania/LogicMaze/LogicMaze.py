@@ -196,8 +196,8 @@ class ArrowMaze( StateSpaceSearch, Maze ):
 			distance += 1
 		return adjacentStateList
 
-	def getCacheEntryFromSearchState( self, initialState ):
-		return initialState.cell
+	def getCacheEntryFromSearchState( self, searchState ):
+		return searchState.cell
 
 	def getStartState( self ):
 		return SearchState( self.startCell, previousMove=None, previousState=None )
@@ -262,8 +262,8 @@ class ChessMaze( StateSpaceSearch, Maze ):
 		
 		return adjacentStateList
 
-	def getCacheEntryFromSearchState( self, initialState ):
-		return initialState.cell
+	def getCacheEntryFromSearchState( self, searchState ):
+		return searchState.cell
 
 	def getStartState( self ):
 		return SearchState( self.startCell, previousMove=None, previousState=None )
