@@ -5,7 +5,7 @@ import itertools
 
 from StateSpaceSearch import (StateSpaceSearch, Maze, MazeLayout, SearchState, Movement, Move, BaseMazeInterface)
 
-class Labyrinth( BaseMazeInterface, StateSpaceSearch ):
+class TiltMaze( BaseMazeInterface, StateSpaceSearch ):
 	def __init__( self, rows, cols, blockingCellList, mazeName=None ):		
 		BaseMazeInterface.__init__( self, rows, cols )
 		self.startCell = self.targetCell = None
@@ -61,9 +61,9 @@ class Labyrinth( BaseMazeInterface, StateSpaceSearch ):
 
 		return pathString
 
-class JumpingLabyrinthTest( unittest.TestCase ):
+class TiltMazeTest( unittest.TestCase ):
 	def _readMaze( self, filename ):
-		with open( 'tests/Labyrinth/{}'.format( filename ) ) as inputFile:
+		with open( 'tests/TiltMaze/{}'.format( filename ) ) as inputFile:
 			rows, cols = map( int, inputFile.readline().strip().split() )
 			startCellNumber, targetCellNumber = map( int, inputFile.readline().strip().split() )
 			blockingCellList = list()
@@ -76,18 +76,18 @@ class JumpingLabyrinthTest( unittest.TestCase ):
 		rows, cols, startCellNumber, targetCellNumber, blockingCellList = self._readMaze( testcaseFile )
 		mazeName = testcaseFile
 		
-		labyrinth = Labyrinth( rows, cols, blockingCellList, mazeName=mazeName )
+		labyrinth = TiltMaze( rows, cols, blockingCellList, mazeName=mazeName )
 		pathString = labyrinth.solve( startCellNumber, targetCellNumber )
 
 		prettyPathString = ''.join( map( lambda token : token.strip(), pathString.split( ':' ) ) )
 		pathLength = len( pathString.split( ':' ) )
-		print( 'Labyrinth: mazeName = {} Path : {} Length = {}'.format( mazeName, prettyPathString, pathLength ) )
+		print( 'TiltMaze: mazeName = {} Path : {} Length = {}'.format( mazeName, prettyPathString, pathLength ) )
 
 		self.assertEqual( pathLength, expectedSolutionDict[ testcaseFile ] )
 
 	def _readSolutionFile( self, solutionFileName ):
 		expectedSolutionDict = dict()
-		with open( 'tests/Labyrinth/{}.ans'.format( solutionFileName ) ) as solutionFile:
+		with open( 'tests/TiltMaze/{}.ans'.format( solutionFileName ) ) as solutionFile:
 			for solutionLine in solutionFile.readlines():
 				testcaseFile, expectedMoveCount = solutionLine.strip().split( ':' )
 				expectedSolutionDict[ testcaseFile.strip() ] = int( expectedMoveCount )
@@ -95,7 +95,7 @@ class JumpingLabyrinthTest( unittest.TestCase ):
 
 	def test_solve( self ):
 		testcaseFiles = set()
-		for testcaseFile in os.listdir( 'tests/Labyrinth' ):
+		for testcaseFile in os.listdir( 'tests/TiltMaze' ):
 			testcaseFiles.add( Path( testcaseFile ).stem )
 
 		solutionFileName = 'Solution'

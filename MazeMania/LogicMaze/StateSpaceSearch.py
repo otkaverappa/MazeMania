@@ -80,6 +80,11 @@ class Movement:
 	}
 	diagonalMoves = set( diagonalMovementCode.keys() )
 
+	# NO MOVEMENT
+	noMovementCode = {
+	'~' : (0, 0)
+	}
+
 	oppositeDirectionDict = {
 	'N' : 'S', 'S' : 'N', 'E' : 'W', 'W' : 'E'
 	}
