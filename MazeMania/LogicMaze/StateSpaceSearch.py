@@ -104,8 +104,10 @@ class Move:
 		       Move.MOVE_TYPE_HORIZONTAL_OR_VERTICAL
 
 class SearchState:
+	dummyCell = (0, 0)
+
 	def __init__( self, cell, previousMove, previousState ):
-		self.cell = cell
+		self.cell = SearchState.dummyCell if cell is None else cell
 		assert previousMove is None or isinstance( previousMove, Move )
 		assert previousState is None or isinstance( previousState, SearchState )
 		self.previousMove = previousMove

@@ -1,0 +1,5 @@
+5 5
+red_marbles = 15
+black_marbles = 20,22,23,24,25
+target = 21
+1:E 2:E 3:S 6:E 7:S 11:S 12:S 13:E 14:E 18:E 19:E 20:S 22:E 23:E
