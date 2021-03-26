@@ -274,6 +274,29 @@ class ChessMaze( StateSpaceSearch, Maze ):
 	def solve( self ):
 		return self.breadthFirstSearch()
 
+class ChessMazeAlternateColor( ChessMaze ):
+	def __init__( self, mazeLayout, mazeName=None ):
+		ChessMaze.__init__( self, mazeLayout, mazeName )
+		self.whitePieceToken = 'w'
+
+	def getAdjacentStateList( self, currentState ):
+		adjacentStateList = ChessMaze.getAdjacentStateList( self, currentState )
+
+		row, col = currentState.cell
+		color = self.mazeLayout.getPropertyString( row, col )
+		assert color in (None, self.whitePieceToken)
+
+		filteredAdjacentStateList = list()
+		for state in adjacentStateList:
+			u, v = state.cell
+			adjacentCellColor = self.mazeLayout.getPropertyString( u, v )
+			assert adjacentCellColor in (None, self.whitePieceToken)
+			
+			if adjacentCellColor != color:
+				filteredAdjacentStateList.append( state )
+
+		return filteredAdjacentStateList
+
 class MazeTest( unittest.TestCase ):
 	def _verifyMaze( self, maze ):
 		expectedPathList = readMazeSolutionFromFile( maze.getMazeName() )
@@ -291,8 +314,12 @@ class MazeTest( unittest.TestCase ):
 		for mazeName in ('FourKings', 'Chess77', 'BishopCastleKnight'):
 			self._verifyMaze( ChessMaze( readMazeFromFile( mazeName ), mazeName=mazeName ) )
 
+		# Multiple solutions for ChessMoves and TheCastle.
 		for mazeName in ('ChessMoves', ):
 			pass
+
+		for mazeName in ('KnightsCircle', 'ThreeKings', 'Whirlpool', 'KnightAndDay', 'TheCastle'):
+			self._verifyMaze( ChessMazeAlternateColor( readMazeFromFile( mazeName ), mazeName=mazeName ) )
 
 	def test_ArrowMaze( self ):
 		for mazeName in ('ArrowTheorem', ):
