@@ -2,6 +2,7 @@ import unittest
 from collections import deque
 import itertools
 import copy
+import functools
 
 from StateSpaceSearch import (StateSpaceSearch, Maze, MazeLayout, SearchState, Movement, Move, UseDefaultImplementation)
 
@@ -208,6 +209,10 @@ class ArrowMaze( StateSpaceSearch, Maze ):
 	def solve( self ):
 		return self.breadthFirstSearch()
 
+class LinkMaze( StateSpaceSearch, Maze ):
+	def __init__( self, mazeLayout, mazeName=None ):
+		Maze.__init__( self, mazeLayout, mazeName )
+
 class ChessMaze( StateSpaceSearch, Maze ):
 	def __init__( self, mazeLayout, mazeName=None ):
 		Maze.__init__( self, mazeLayout, mazeName )
@@ -221,15 +226,22 @@ class ChessMaze( StateSpaceSearch, Maze ):
 		'R' : { 'unit' : str(),  'cellList' : adjacentCellList },
 		'B' : { 'unit' : str(),  'cellList' : diagonalCellList },
 		'K' : { 'unit' : None,   'cellList' : adjacentCellList + diagonalCellList },
-		'Q' : { 'unit' : str(),  'cellList' : adjacentCellList + diagonalCellList }
+		'Q' : { 'unit' : str(),  'cellList' : adjacentCellList + diagonalCellList },
 		}
+		self.pawnToken = 'P'
+		self.whitePieceToken = 'w'
 		self.emptyCell = '*'
+		self.adjacentStateFilterFunc = lambda currentState, newSearchState : True
 
 	def getAdjacentStateList( self, currentState ):
 		adjacentStateList = list()
 
 		row, col = currentState.cell
-		movementCodeDict = self.chessMovementCode[ self.mazeLayout.getRaw( row, col ) ]
+		currentPiece = self.mazeLayout.getRaw( row, col )
+		if currentPiece == self.pawnToken:
+			assert currentState.previousMove is not None
+			currentPiece = currentState.previousMove.moveCode
+		movementCodeDict = self.chessMovementCode[ currentPiece ]
 
 		unit = movementCodeDict[ 'unit' ]
 		cellDeltaList = movementCodeDict[ 'cellList' ]
@@ -243,7 +255,7 @@ class ChessMaze( StateSpaceSearch, Maze ):
 			if self.mazeLayout.getRaw( u, v ) == self.emptyCell:
 				exploreList.append( (du, dv) )
 				continue
-			move = Move( moveCode=str(), moveDistance=None )
+			move = Move( moveCode=currentPiece, moveDistance=None )
 			newSearchState = SearchState( adjacentCell, previousMove=move, previousState=currentState )
 			adjacentStateList.append( newSearchState )
 
@@ -255,12 +267,11 @@ class ChessMaze( StateSpaceSearch, Maze ):
 					if self.isCellOutsideGrid( adjacentCell ):
 						break
 					if self.mazeLayout.getRaw( u, v ) != self.emptyCell:
-						move = Move( moveCode=str(), moveDistance=None )
+						move = Move( moveCode=currentPiece, moveDistance=None )
 						newSearchState = SearchState( adjacentCell, previousMove=move, previousState=currentState )
 						adjacentStateList.append( newSearchState )
 						break
-		
-		return adjacentStateList
+		return filter( functools.partial( self.adjacentStateFilterFunc, currentState ), adjacentStateList )
 
 	def getCacheEntryFromSearchState( self, searchState ):
 		return searchState.cell
@@ -274,28 +285,63 @@ class ChessMaze( StateSpaceSearch, Maze ):
 	def solve( self ):
 		return self.breadthFirstSearch()
 
-class ChessMazeAlternateColor( ChessMaze ):
+class ChessMazeDifferentColor( ChessMaze ):
 	def __init__( self, mazeLayout, mazeName=None ):
 		ChessMaze.__init__( self, mazeLayout, mazeName )
-		self.whitePieceToken = 'w'
+		self.greyPieceToken = 'g'
 
-	def getAdjacentStateList( self, currentState ):
-		adjacentStateList = ChessMaze.getAdjacentStateList( self, currentState )
+		# Compare the colors of the pieces in the currentState and newSearchState. Return True if they are
+		# different.
+		def adjacentStateFilterFunc( currentState, newSearchState ):
+			row, col = currentState.cell
+			color = self.mazeLayout.getPropertyString( row, col )
+			self._verifyColor( color )
 
-		row, col = currentState.cell
-		color = self.mazeLayout.getPropertyString( row, col )
-		assert color in (None, self.whitePieceToken)
-
-		filteredAdjacentStateList = list()
-		for state in adjacentStateList:
-			u, v = state.cell
+			u, v = newSearchState.cell
 			adjacentCellColor = self.mazeLayout.getPropertyString( u, v )
-			assert adjacentCellColor in (None, self.whitePieceToken)
-			
-			if adjacentCellColor != color:
-				filteredAdjacentStateList.append( state )
+			self._verifyColor( adjacentCellColor )
 
-		return filteredAdjacentStateList
+			return adjacentCellColor != color
+		
+		self.adjacentStateFilterFunc = adjacentStateFilterFunc
+
+	def _verifyColor( self, color ):
+		assert color in (None, self.whitePieceToken, self.greyPieceToken)
+
+class ChessMazeFlipFlop( ChessMaze ):
+	def __init__( self, mazeLayout, mazeName=None ):
+		ChessMaze.__init__( self, mazeLayout, mazeName )
+
+		def adjacentStateFilterFunc( currentState, newSearchState ):
+			u, v = newSearchState.cell
+			isWhitePiece = self.mazeLayout.getPropertyString( u, v ) == self.whitePieceToken
+			if currentState.previousState is None:
+				return not isWhitePiece
+			x, y = currentState.cell
+			isW1 = self.mazeLayout.getPropertyString( x, y ) == self.whitePieceToken
+			x, y = currentState.previousState.cell
+			isW2 = self.mazeLayout.getPropertyString( x, y ) == self.whitePieceToken
+			if isW1 ^ isW2:
+				return isWhitePiece == isW1
+			else:
+				return isWhitePiece != isW1
+
+		self.adjacentStateFilterFunc = adjacentStateFilterFunc
+
+	def getCacheEntryFromSearchState( self, searchState ):
+		cell1 = cell2 = None
+		if searchState.previousState is not None:
+			cell1 = searchState.previousState.cell
+			if searchState.previousState.previousState is not None:
+				cell2 = searchState.previousState.previousState.cell
+		return (cell1, cell2, searchState.cell)
+
+class ChessMazeWildcard( ChessMaze ):
+	def __init__( self, mazeLayout, mazeName=None ):
+		ChessMaze.__init__( self, mazeLayout, mazeName )
+
+	def getCacheEntryFromSearchState( self, searchState ):
+		return (searchState.cell, searchState.previousMove.moveCode if searchState.previousMove is not None else None)
 
 class MazeTest( unittest.TestCase ):
 	def _verifyMaze( self, maze ):
@@ -310,6 +356,11 @@ class MazeTest( unittest.TestCase ):
 		self.assertEqual( pathList, expectedPathList )
 		print()
 
+	def test_LinkMaze( self ):
+		#for mazeName in ('DaisyChain', ):
+		#	self._verifyMaze( LinkMaze( readMazeFromFile( mazeName ), mazeName=mazeName ) )
+		pass
+
 	def test_ChessMaze( self ):
 		for mazeName in ('FourKings', 'Chess77', 'BishopCastleKnight'):
 			self._verifyMaze( ChessMaze( readMazeFromFile( mazeName ), mazeName=mazeName ) )
@@ -318,8 +369,14 @@ class MazeTest( unittest.TestCase ):
 		for mazeName in ('ChessMoves', ):
 			pass
 
-		for mazeName in ('KnightsCircle', 'ThreeKings', 'Whirlpool', 'KnightAndDay', 'TheCastle'):
-			self._verifyMaze( ChessMazeAlternateColor( readMazeFromFile( mazeName ), mazeName=mazeName ) )
+		for mazeName in ('KnightsCircle', 'ThreeKings', 'Whirlpool', 'KnightAndDay', 'TheCastle', 'Greyknights'):
+			self._verifyMaze( ChessMazeDifferentColor( readMazeFromFile( mazeName ), mazeName=mazeName ) )
+
+		for mazeName in ('Cuckoo', 'Chessopolis', 'Chameleon', 'Mimic', 'Chessmaster'):
+			self._verifyMaze( ChessMazeWildcard( readMazeFromFile( mazeName ), mazeName=mazeName ) )
+
+		for mazeName in ('Chesapeake', 'TreasureChess', 'TheDarkKnight'):
+			self._verifyMaze( ChessMazeFlipFlop( readMazeFromFile( mazeName ), mazeName=mazeName ) )
 
 	def test_ArrowMaze( self ):
 		for mazeName in ('ArrowTheorem', ):
