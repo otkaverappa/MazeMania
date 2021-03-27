@@ -214,6 +214,7 @@ class SequenceMove( Move ):
 		Move.__init__( self, moveCode, moveDistance )
 		self.sequenceCount = sequenceCount
 		self.shape = self.color = None
+		self.matchType = None
 
 class LinkMaze( StateSpaceSearch, Maze ):
 	def __init__( self, mazeLayout, mazeName=None ):
@@ -224,13 +225,20 @@ class LinkMaze( StateSpaceSearch, Maze ):
 
 		self.wildCardToken, self.emptyCellToken = '*', '.'
 
+	def getColorProperty( self, row, col ):
+		propertyString = self.mazeLayout.getPropertyString( row, col )
+		if propertyString is not None:
+			color, * _ = propertyString.split( '#' )
+			return color
+		return None
+
 	def getAdjacentStateList( self, currentState ):
 		adjacentStateList = list()
 
 		row, col = currentState.cell
 		previousMove = currentState.previousMove
 
-		shape, color = self.mazeLayout.getRaw( row, col ), self.mazeLayout.getPropertyString( row, col )
+		shape, color = self.mazeLayout.getRaw( row, col ), self.getColorProperty( row, col )
 		if shape == self.wildCardToken:
 			shape, color = previousMove.shape, previousMove.color
 		
@@ -240,7 +248,12 @@ class LinkMaze( StateSpaceSearch, Maze ):
 				adjacentCell = x, y = row + du * distance, col + dv * distance
 				if self.isCellOutsideGrid( adjacentCell ):
 					break
-				newShape, newColor = self.mazeLayout.getRaw( x, y ), self.mazeLayout.getPropertyString( x, y )
+				newShape, newColor = self.mazeLayout.getRaw( x, y ), self.getColorProperty( x, y )
+				isEmptyShape = newShape == self.emptyCellToken
+
+				if isEmptyShape:
+					break
+
 				isWildcard = newShape == self.wildCardToken
 				
 				if isWildcard or newShape == shape or newColor == color:
@@ -248,6 +261,7 @@ class LinkMaze( StateSpaceSearch, Maze ):
 					if previousMove is not None and previousMove.moveType() == move.moveType():
 						move.sequenceCount = previousMove.sequenceCount + 1
 					move.shape, move.color = shape, color
+					move.matchType = (newShape == shape, newColor == color)
 					newSearchState = SearchState( adjacentCell, previousMove=move, previousState=currentState )
 					adjacentStateList.append( newSearchState )
 				distance += 1
@@ -276,10 +290,61 @@ class LinkMazeWildcard( LinkMaze ):
 			shape, color = searchState.previousMove.shape, searchState.previousMove.color
 		return (searchState.cell, shape, color)
 
-class LinkMazeSwitchDiagonal( LinkMaze ):
+class LinkMazeAlternatePlainCircle( LinkMaze ):
+	def __init__( self, mazeLayout, mazeName=None ):
+		LinkMaze.__init__( self, mazeLayout, mazeName )
+		self.circleCellToken = '*'
+
+		def adjacentStateFilterFunc( currentState, newSearchState ):
+			if currentState.previousState is None:
+				return True
+			x, y = currentState.cell
+			previousCellCircled = self.isCircled( x, y )
+			x, y = newSearchState.cell
+			currentCellCircled = self.isCircled( x, y )
+
+			return previousCellCircled ^ currentCellCircled
+
+		self.adjacentStateFilterFunc = adjacentStateFilterFunc
+
+	def isCircled( self, row, col ):
+		propertyString = self.mazeLayout.getPropertyString( row, col )
+		return self.circleCellToken in propertyString
+
+class LinkMazeAlternateShapeColor( LinkMaze ):
+	def __init__( self, mazeLayout, mazeName=None ):
+		LinkMaze.__init__( self, mazeLayout, mazeName )
+
+		def adjacentStateFilterFunc( currentState, newSearchState ):
+			shapeMatch, colorMatch = newSearchState.previousMove.matchType
+			if currentState.previousState is None:
+				newSearchState.previousMove.matchType = (shapeMatch, False)
+				return shapeMatch
+			previousMoveShapeMatch, previousMoveColorMatch = currentState.previousMove.matchType
+			if previousMoveShapeMatch and colorMatch:
+				newSearchState.previousMove.matchType = (False, True)
+				return True
+			elif previousMoveColorMatch and shapeMatch:
+				newSearchState.previousMove.matchType = (True, False)
+				return True
+			return False
+
+		self.adjacentStateFilterFunc = adjacentStateFilterFunc
+
+	def getCacheEntryFromSearchState( self, searchState ):
+		shapeMatch = colorMatch = None
+		if searchState.previousMove is not None:
+			shapeMatch, colorMatch = searchState.previousMove.matchType
+		return (searchState.cell, shapeMatch, colorMatch)
+
+class LinkMazeDiagonal( LinkMaze ):
 	def __init__( self, mazeLayout, mazeName=None ):
 		LinkMaze.__init__( self, mazeLayout, mazeName )
 		self.allowedMovementCodes.update( Movement.diagonalMovementCode )
+
+class LinkMazeSwitchDiagonal( LinkMazeDiagonal ):
+	def __init__( self, mazeLayout, mazeName=None ):
+		LinkMazeDiagonal.__init__( self, mazeLayout, mazeName )
 		self.maximumAllowedSequenceCount = 3
 		self.allowedSequenceCountSet = set( [ (1, 2), (2, 3), (3, 1) ] )
 
@@ -448,6 +513,15 @@ class MazeTest( unittest.TestCase ):
 
 		#for mazeName in ('Linkology', ):
 		#	self._verifyMaze( LinkMazeWildcard( readMazeFromFile( mazeName ), mazeName=mazeName ) )
+
+		#for mazeName in ('Linkholes', 'Jingo'):
+		#	self._verifyMaze( LinkMazeAlternateShapeColor( readMazeFromFile( mazeName ), mazeName=mazeName ) )
+
+		#for mazeName in ('MirrorMirror', ):
+			#self._verifyMaze( LinkMazeDiagonal( readMazeFromFile( mazeName ), mazeName=mazeName ) )
+
+		for mazeName in ('Circulate', ):
+			self._verifyMaze( LinkMazeAlternatePlainCircle( readMazeFromFile( mazeName ), mazeName=mazeName ) )
 
 	def test_ChessMaze( self ):
 		for mazeName in ('FourKings', 'Chess77', 'BishopCastleKnight'):
