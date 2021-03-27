@@ -209,16 +209,103 @@ class ArrowMaze( StateSpaceSearch, Maze ):
 	def solve( self ):
 		return self.breadthFirstSearch()
 
+class SequenceMove( Move ):
+	def __init__( self, moveCode, moveDistance, sequenceCount=1 ):
+		Move.__init__( self, moveCode, moveDistance )
+		self.sequenceCount = sequenceCount
+		self.shape = self.color = None
+
 class LinkMaze( StateSpaceSearch, Maze ):
 	def __init__( self, mazeLayout, mazeName=None ):
 		Maze.__init__( self, mazeLayout, mazeName )
+
+		self.adjacentStateFilterFunc = lambda currentState, newSearchState : True
+		self.allowedMovementCodes = copy.deepcopy( Movement.horizontalOrVerticalMovementCode )
+
+		self.wildCardToken, self.emptyCellToken = '*', '.'
+
+	def getAdjacentStateList( self, currentState ):
+		adjacentStateList = list()
+
+		row, col = currentState.cell
+		previousMove = currentState.previousMove
+
+		shape, color = self.mazeLayout.getRaw( row, col ), self.mazeLayout.getPropertyString( row, col )
+		if shape == self.wildCardToken:
+			shape, color = previousMove.shape, previousMove.color
+		
+		for directionTag, (du, dv) in self.allowedMovementCodes.items():
+			distance = 1
+			while True:
+				adjacentCell = x, y = row + du * distance, col + dv * distance
+				if self.isCellOutsideGrid( adjacentCell ):
+					break
+				newShape, newColor = self.mazeLayout.getRaw( x, y ), self.mazeLayout.getPropertyString( x, y )
+				isWildcard = newShape == self.wildCardToken
+				
+				if isWildcard or newShape == shape or newColor == color:
+					move = SequenceMove( moveCode=directionTag, moveDistance=distance )
+					if previousMove is not None and previousMove.moveType() == move.moveType():
+						move.sequenceCount = previousMove.sequenceCount + 1
+					move.shape, move.color = shape, color
+					newSearchState = SearchState( adjacentCell, previousMove=move, previousState=currentState )
+					adjacentStateList.append( newSearchState )
+				distance += 1
+
+		return filter( functools.partial( self.adjacentStateFilterFunc, currentState ), adjacentStateList )
+
+	def getCacheEntryFromSearchState( self, searchState ):
+		return searchState.cell
+
+	def getStartState( self ):
+		return SearchState( self.startCell, previousMove=None, previousState=None )
+
+	def isTargetState( self, currentState ):
+		return currentState.isTargetCell( self.targetCell )
+
+	def solve( self ):
+		return self.breadthFirstSearch()
+
+class LinkMazeWildcard( LinkMaze ):
+	def __init__( self, mazeLayout, mazeName=None ):
+		LinkMaze.__init__( self, mazeLayout, mazeName )
+
+	def getCacheEntryFromSearchState( self, searchState ):
+		shape = color = None
+		if searchState.previousMove is not None:
+			shape, color = searchState.previousMove.shape, searchState.previousMove.color
+		return (searchState.cell, shape, color)
+
+class LinkMazeSwitchDiagonal( LinkMaze ):
+	def __init__( self, mazeLayout, mazeName=None ):
+		LinkMaze.__init__( self, mazeLayout, mazeName )
+		self.allowedMovementCodes.update( Movement.diagonalMovementCode )
+		self.maximumAllowedSequenceCount = 3
+		self.allowedSequenceCountSet = set( [ (1, 2), (2, 3), (3, 1) ] )
+
+		def adjacentStateFilterFunc( currentState, newSearchState ):
+			# We should start from horizontal and vertical moves only.
+			if currentState.previousState is None:
+				return newSearchState.previousMove.moveCode in Movement.horizontalOrVerticalMovementCode
+			A, B = currentState.previousMove.sequenceCount, newSearchState.previousMove.sequenceCount
+			if B > self.maximumAllowedSequenceCount:
+				return False
+			return (A, B) in self.allowedSequenceCountSet
+
+		self.adjacentStateFilterFunc = adjacentStateFilterFunc
+
+	def getCacheEntryFromSearchState( self, searchState ):
+		moveType = sequenceCount = None
+		if searchState.previousMove is not None:
+			moveType, sequenceCount = searchState.previousMove.moveType(), searchState.previousMove.sequenceCount
+		return (searchState.cell, moveType, sequenceCount)
 
 class ChessMaze( StateSpaceSearch, Maze ):
 	def __init__( self, mazeLayout, mazeName=None ):
 		Maze.__init__( self, mazeLayout, mazeName )
 
-		adjacentCellList = [ (0, 1), (0, -1), ( 1, 0), (-1,  0) ]
-		diagonalCellList = [ (1, 1), (1, -1), (-1, 1), (-1, -1) ]
+		adjacentCellList = list( Movement.horizontalOrVerticalMovementCode.values() )
+		diagonalCellList = list( Movement.diagonalMovementCode.values() )
 		
 		# k : Knight, R : Rook, B : Bishop, K : King
 		self.chessMovementCode = {
@@ -329,12 +416,7 @@ class ChessMazeFlipFlop( ChessMaze ):
 		self.adjacentStateFilterFunc = adjacentStateFilterFunc
 
 	def getCacheEntryFromSearchState( self, searchState ):
-		cell1 = cell2 = None
-		if searchState.previousState is not None:
-			cell1 = searchState.previousState.cell
-			if searchState.previousState.previousState is not None:
-				cell2 = searchState.previousState.previousState.cell
-		return (cell1, cell2, searchState.cell)
+		return (None if searchState.previousState is None else searchState.previousState.cell, searchState.cell)
 
 class ChessMazeWildcard( ChessMaze ):
 	def __init__( self, mazeLayout, mazeName=None ):
@@ -357,9 +439,15 @@ class MazeTest( unittest.TestCase ):
 		print()
 
 	def test_LinkMaze( self ):
-		#for mazeName in ('DaisyChain', ):
-		#	self._verifyMaze( LinkMaze( readMazeFromFile( mazeName ), mazeName=mazeName ) )
-		pass
+		for mazeName in ('DaisyChain', 'Ladder'):
+			self._verifyMaze( LinkMaze( readMazeFromFile( mazeName ), mazeName=mazeName ) )
+
+		for mazeName in ('Skeetology', 'ThreeByThree'):
+			pass
+			#self._verifyMaze( LinkMazeSwitchDiagonal( readMazeFromFile( mazeName ), mazeName=mazeName ) )
+
+		#for mazeName in ('Linkology', ):
+		#	self._verifyMaze( LinkMazeWildcard( readMazeFromFile( mazeName ), mazeName=mazeName ) )
 
 	def test_ChessMaze( self ):
 		for mazeName in ('FourKings', 'Chess77', 'BishopCastleKnight'):
