@@ -1,0 +1,7 @@
+6:b 8:b 6:o 8:v   .   .   .
+8:v P:p 8:b P:b   .   .   .
+X:b 8:p 8:o X:v   .   .   .
+8:p P:o 6:g 5:p 5:g 6:v E:o
+.   .   .   X:o 5:b 5:v E:b
+.   .   .   8:b P:o 6:b 5:o
+.   .   .   6:o P:v 5:o P:p

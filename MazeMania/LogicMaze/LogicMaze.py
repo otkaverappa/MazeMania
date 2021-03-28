@@ -285,6 +285,13 @@ class LinkMaze( StateSpaceSearch, Maze ):
 	def solve( self ):
 		return self.breadthFirstSearch()
 
+class LinkMazeCacheCellMoveCode:
+	def getCacheEntryFromSearchState( self, searchState ):
+		moveCode = None
+		if searchState.previousMove is not None:
+			moveCode = searchState.previousMove.moveCode
+		return (searchState.cell, moveCode)
+
 class LinkMazeWildcard( LinkMaze ):
 	def __init__( self, mazeLayout, mazeName=None ):
 		LinkMaze.__init__( self, mazeLayout, mazeName )
@@ -295,7 +302,7 @@ class LinkMazeWildcard( LinkMaze ):
 			shape, color = searchState.previousMove.shape, searchState.previousMove.color
 		return (searchState.cell, shape, color)
 
-class LinkMazeNoUTurn( LinkMaze ):
+class LinkMazeNoUTurn( LinkMazeCacheCellMoveCode, LinkMaze ):
 	def __init__( self, mazeLayout, mazeName=None ):
 		LinkMaze.__init__( self, mazeLayout, mazeName )
 
@@ -385,7 +392,7 @@ class LinkMazeDiagonal( LinkMaze ):
 		LinkMaze.__init__( self, mazeLayout, mazeName )
 		self.allowedMovementCodes.update( Movement.diagonalMovementCode )
 
-class LinkMazeSwitchDiagonalNoUTurn( LinkMazeDiagonal ):
+class LinkMazeSwitchDiagonalNoUTurn( LinkMazeCacheCellMoveCode, LinkMazeDiagonal ):
 	def __init__( self, mazeLayout, mazeName=None ):
 		LinkMazeDiagonal.__init__( self, mazeLayout, mazeName )
 
@@ -405,12 +412,6 @@ class LinkMazeSwitchDiagonalNoUTurn( LinkMazeDiagonal ):
 			return currentCellCircled ^ isMoveTypeSame
 
 		self.adjacentStateFilterFunc = adjacentStateFilterFunc
-
-	def getCacheEntryFromSearchState( self, searchState ):
-		moveType = None
-		if searchState.previousMove is not None:
-			moveType = searchState.previousMove.moveType()
-		return (searchState.cell, moveType)
 
 class LinkMazeSwitchDiagonal( LinkMazeDiagonal ):
 	def __init__( self, mazeLayout, mazeName=None ):
@@ -583,6 +584,7 @@ class MazeTest( unittest.TestCase ):
 		for mazeName in ('Linkology', ):
 			self._verifyMaze( LinkMazeWildcard( readMazeFromFile( mazeName ), mazeName=mazeName ) )
 
+		# Multiple solutions for Caterpillar
 		for mazeName in ('Linkholes', 'Jingo', 'Jango', 'Slinky'):
 			self._verifyMaze( LinkMazeAlternateShapeColor( readMazeFromFile( mazeName ), mazeName=mazeName ) )
 
@@ -595,7 +597,7 @@ class MazeTest( unittest.TestCase ):
 		for mazeName in ('FlipFlop', ):
 			self._verifyMaze( LinkMazeSwitchShapeColor( readMazeFromFile( mazeName ), mazeName=mazeName ) )
 
-		for mazeName in ('Banana', ):
+		for mazeName in ('Banana', 'DoubleDiamond'):
 			self._verifyMaze( LinkMazeNoUTurn( readMazeFromFile( mazeName ), mazeName=mazeName ) )
 
 		for mazeName in ('Miniminx', ):
