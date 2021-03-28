@@ -119,7 +119,7 @@ class SearchState:
 		self.previousMove = previousMove
 		self.previousState = previousState
 
-	def isTargetCell( self, targetCell ):
+	def isTargetState( self, targetCell ):
 		return self.cell == targetCell
 
 class StateSpaceSearch:

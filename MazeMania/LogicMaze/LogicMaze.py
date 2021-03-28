@@ -63,7 +63,7 @@ class JumpingMaze( StateSpaceSearch, Maze ):
 		return SearchState( self.startCell, previousMove=None, previousState=None )
 
 	def isTargetState( self, currentState ):
-		return currentState.isTargetCell( self.targetCell )
+		return currentState.isTargetState( self.targetCell )
 
 	def solve( self ):
 		return self.breadthFirstSearch()
@@ -204,7 +204,7 @@ class ArrowMaze( StateSpaceSearch, Maze ):
 		return SearchState( self.startCell, previousMove=None, previousState=None )
 
 	def isTargetState( self, currentState ):
-		return currentState.isTargetCell( self.targetCell )
+		return currentState.isTargetState( self.targetCell )
 
 	def solve( self ):
 		return self.breadthFirstSearch()
@@ -280,7 +280,7 @@ class LinkMaze( StateSpaceSearch, Maze ):
 		return SearchState( self.startCell, previousMove=None, previousState=None )
 
 	def isTargetState( self, currentState ):
-		return currentState.isTargetCell( self.targetCell )
+		return currentState.isTargetState( self.targetCell )
 
 	def solve( self ):
 		return self.breadthFirstSearch()
@@ -503,7 +503,7 @@ class ChessMaze( StateSpaceSearch, Maze ):
 		return SearchState( self.startCell, previousMove=None, previousState=None )
 
 	def isTargetState( self, currentState ):
-		return currentState.isTargetCell( self.targetCell )
+		return currentState.isTargetState( self.targetCell )
 
 	def solve( self ):
 		return self.breadthFirstSearch()
@@ -561,6 +561,69 @@ class ChessMazeWildcard( ChessMaze ):
 	def getCacheEntryFromSearchState( self, searchState ):
 		return (searchState.cell, searchState.previousMove.moveCode if searchState.previousMove is not None else None)
 
+class CalculationSearchState( SearchState ):
+	def __init__( self, cell, previousMove, previousState, accumulator ):
+		SearchState.__init__( self, cell, previousMove, previousState )
+		self.accumulator = accumulator
+
+	def isTargetState( self, targetCell, targetAccumulatorValue ):
+		return self.cell == targetCell and self.accumulator == targetAccumulatorValue
+
+class CalculationMaze( StateSpaceSearch, Maze ):
+	def __init__( self, mazeLayout, mazeName=None, target=0 ):
+		Maze.__init__( self, mazeLayout, mazeName )
+		
+		self.targetAccumulatorValue = target
+
+		self.allowedMovementCodes = copy.deepcopy( Movement.horizontalOrVerticalMovementCode )
+		self.supportedSymbols = set( [ '=', '+', '-', 'x' ] )
+		self.adjacentStateFilterFunc = lambda currentState, newSearchState: True
+
+	def apply( self, token, accumulator ):
+		# token is of the form: "=0", "+3", "-3", "x1"
+		symbol, argument = token[ 0 ], int( token[ 1 : ] )
+		assert symbol in self.supportedSymbols
+
+		result = None
+		if symbol == '=':
+			result = argument
+		elif symbol == '+':
+			result = accumulator + argument
+		elif symbol == '-':
+			result = accumulator - argument
+		elif symbol == 'x':
+			result = accumulator * argument
+		return result
+
+	def getAdjacentStateList( self, currentState ):
+		adjacentStateList = list()
+
+		row, col = currentState.cell
+		accumulator = currentState.accumulator
+		for directionTag, (du, dv) in self.allowedMovementCodes.items():
+			adjacentCell = x, y = row + du, col + dv
+			if self.isCellOutsideGrid( adjacentCell ):
+				continue
+			newAccumulator = self.apply( self.mazeLayout.getRaw( x, y ), accumulator )
+			move = Move( moveCode=directionTag, moveDistance=1 )
+			newSearchState = CalculationSearchState( adjacentCell, previousMove=move, previousState=currentState,
+				                                     accumulator=newAccumulator )
+			adjacentStateList.append( newSearchState )
+		
+		return filter( functools.partial( self.adjacentStateFilterFunc, currentState ), adjacentStateList )
+
+	def getCacheEntryFromSearchState( self, searchState ):
+		return (searchState.cell, searchState.accumulator)
+
+	def getStartState( self ):
+		return CalculationSearchState( self.startCell, previousMove=None, previousState=None, accumulator=0 )
+
+	def isTargetState( self, currentState ):
+		return currentState.isTargetState( self.targetCell, self.targetAccumulatorValue )
+
+	def solve( self ):
+		return self.breadthFirstSearch()
+
 class MazeTest( unittest.TestCase ):
 	def _verifyMaze( self, maze ):
 		expectedPathList = readMazeSolutionFromFile( maze.getMazeName() )
@@ -573,6 +636,10 @@ class MazeTest( unittest.TestCase ):
 		print( 'Cell list: {}'.format( pathList ) )
 		self.assertEqual( pathList, expectedPathList )
 		print()
+
+	#def test_CalculationMaze( self ):
+	#	for mazeName in ('KeyToTheDoor', ):
+	#		self._verifyMaze( CalculationMaze( readMazeFromFile( mazeName ), mazeName=mazeName, target=21 ) )
 
 	def test_LinkMaze( self ):
 		for mazeName in ('DaisyChain', 'Ladder'):
