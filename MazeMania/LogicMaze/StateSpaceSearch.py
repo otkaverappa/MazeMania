@@ -86,7 +86,8 @@ class Movement:
 	}
 
 	oppositeDirectionDict = {
-	'N' : 'S', 'S' : 'N', 'E' : 'W', 'W' : 'E'
+	'N' : 'S', 'S' : 'N', 'E' : 'W', 'W' : 'E',
+	'NW' : 'SE', 'SE' : 'NW', 'NE' : 'SW', 'SW' : 'NE'
 	}
 
 class Move:
