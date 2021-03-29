@@ -12,7 +12,11 @@ class BaseMazeInterface:
 		row, col = cell
 		return row < 0 or row >= self.rows or col < 0 or col >= self.cols
 
-	def getPath( self, searchState ):
+	def convertCellNumber( self, cellNumber ):
+		cellNumber = cellNumber - 1
+		return (cellNumber // self.cols, cellNumber % self.cols)
+
+	def getPath( self, searchState, separator=' : ' ):
 		def cellNumber( cell ):
 			row, col = cell
 			return row * self.cols + col + 1
@@ -29,7 +33,7 @@ class BaseMazeInterface:
 		pathStringList.reverse()
 		cellList.reverse()
 		
-		return ' : '.join( pathStringList ), cellList
+		return separator.join( pathStringList ), cellList
 
 class MazeLayout( BaseMazeInterface ):
 	def __init__( self, rawMazeLayout ):
@@ -66,6 +70,11 @@ class MazeLayout( BaseMazeInterface ):
 
 	def getPropertyString( self, row, col ):
 		return self.propertyDict.get( (row, col) )
+
+class BlockOrientation:
+	HORIZONTAL_EAST_WEST = 0
+	HORIZONTAL_NORTH_SOUTH = 1
+	VERTICAL = 2
 
 class Movement:
 	# NORTH, SOUTH, WEST, EAST
@@ -143,7 +152,7 @@ class StateSpaceSearch:
 
 		visited = set()
 		visited.add( self.getCacheEntryFromSearchState( initialState ) )
-
+		
 		while len( q ) > 0:
 			currentState = q.popleft()
 			if self.isTargetState( currentState ):

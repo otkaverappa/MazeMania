@@ -302,18 +302,18 @@ class LinkMazeWildcard( LinkMaze ):
 			shape, color = searchState.previousMove.shape, searchState.previousMove.color
 		return (searchState.cell, shape, color)
 
+def filterUTurnMove( currentState, newSearchState ):
+	if currentState.previousState is None:
+				return True
+	previousMoveDirection = currentState.previousMove.moveCode
+	currentMoveDirection = newSearchState.previousMove.moveCode
+	return currentMoveDirection != Movement.oppositeDirectionDict[ previousMoveDirection ]
+
 class LinkMazeNoUTurn( LinkMazeCacheCellMoveCode, LinkMaze ):
 	def __init__( self, mazeLayout, mazeName=None ):
 		LinkMaze.__init__( self, mazeLayout, mazeName )
 
-		def adjacentStateFilterFunc( currentState, newSearchState ):
-			if currentState.previousState is None:
-				return True
-			previousMoveDirection = currentState.previousMove.moveCode
-			currentMoveDirection = newSearchState.previousMove.moveCode
-			return currentMoveDirection != Movement.oppositeDirectionDict[ previousMoveDirection ]
-
-		self.adjacentStateFilterFunc = adjacentStateFilterFunc
+		self.adjacentStateFilterFunc = filterUTurnMove
 
 class LinkMazeAlternatePlainCircle( LinkMaze ):
 	def __init__( self, mazeLayout, mazeName=None ):
@@ -624,6 +624,12 @@ class CalculationMaze( StateSpaceSearch, Maze ):
 	def solve( self ):
 		return self.breadthFirstSearch()
 
+class CalculationMazeNoUTurn( CalculationMaze ):
+	def __init__( self, mazeLayout, mazeName=None, target=0 ):
+		CalculationMaze.__init__( self, mazeLayout, mazeName, target=target )
+
+		self.adjacentStateFilterFunc = filterUTurnMove
+
 class MazeTest( unittest.TestCase ):
 	def _verifyMaze( self, maze ):
 		expectedPathList = readMazeSolutionFromFile( maze.getMazeName() )
@@ -637,9 +643,12 @@ class MazeTest( unittest.TestCase ):
 		self.assertEqual( pathList, expectedPathList )
 		print()
 
-	#def test_CalculationMaze( self ):
-	#	for mazeName in ('KeyToTheDoor', ):
-	#		self._verifyMaze( CalculationMaze( readMazeFromFile( mazeName ), mazeName=mazeName, target=21 ) )
+	def test_CalculationMaze( self ):
+		for mazeName, target in (('KeyToTheDoor', 21), ):
+			self._verifyMaze( CalculationMaze( readMazeFromFile( mazeName ), mazeName=mazeName, target=target ) )
+
+		for mazeName, target in (('TopTen', 10), ):
+			self._verifyMaze( CalculationMazeNoUTurn( readMazeFromFile( mazeName ), mazeName=mazeName, target=target ) )
 
 	def test_LinkMaze( self ):
 		for mazeName in ('DaisyChain', 'Ladder'):

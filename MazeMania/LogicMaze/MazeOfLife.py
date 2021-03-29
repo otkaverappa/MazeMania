@@ -26,14 +26,10 @@ class MazeOfLife( BaseMazeInterface, StateSpaceSearch ):
 		self.allowedMovementCodes.update( Movement.diagonalMovementCode )
 		self.allowedMovementCodes.update( Movement.noMovementCode )
 
-		self.startCell = self._convertCellNumber( mazeOfLifeConfig.startCellNumber )
-		self.targetCell = self._convertCellNumber( mazeOfLifeConfig.targetCellNumber )
+		self.startCell = self.convertCellNumber( mazeOfLifeConfig.startCellNumber )
+		self.targetCell = self.convertCellNumber( mazeOfLifeConfig.targetCellNumber )
 
-		self.aliveCellList = list( map( self._convertCellNumber, mazeOfLifeConfig.aliveCellNumberList ) )
-
-	def _convertCellNumber( self, cellNumber ):
-		cellNumber = cellNumber - 1
-		return (cellNumber // self.cols, cellNumber % self.cols)
+		self.aliveCellList = list( map( self.convertCellNumber, mazeOfLifeConfig.aliveCellNumberList ) )
 
 	def _nextGeneration( self, aliveCellSet ):
 		cellsToEvaluate = set()
