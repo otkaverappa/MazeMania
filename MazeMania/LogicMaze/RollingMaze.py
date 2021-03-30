@@ -67,17 +67,16 @@ class RollingBlock_2_1_1( RollingBlock ):
 			assert c1 == c2 and (z1, z2) == (0, 0) and r1 + 1 == r2
 			return BlockOrientation.HORIZONTAL_NORTH_SOUTH
 
-	def isTargetState( self, targetCell ):
-		(r1, c1, z1), (r2, c2, z2) = self.occupiedCells
-		return (r1, c1) == (r2, c2) == targetCell
+	def isTargetState( self, targetState ):
+		return self.occupiedCells == targetState
 
 class RollingBlockSearchState( SearchState ):
 	def __init__( self, previousMove, previousState, rollingBlock ):
 		SearchState.__init__( self, cell=None, previousMove=previousMove, previousState=previousState )
 		self.rollingBlock = rollingBlock
 
-	def isTargetState( self, targetCell ):
-		return self.rollingBlock.isTargetState( targetCell )
+	def isTargetState( self, targetState ):
+		return self.rollingBlock.isTargetState( targetState )
 
 class RollingBlockMaze( StateSpaceSearch, BaseMazeInterface ):
 	def __init__( self, mazeLayout, mazeName=None ):
@@ -86,15 +85,23 @@ class RollingBlockMaze( StateSpaceSearch, BaseMazeInterface ):
 
 		self.mazeLayout = mazeLayout
 		self.startCellToken, self.targetCellToken, self.emptyCellToken, self.blockedCellToken = 'S', 'T', '.', '#'
-		self.startCell = self.targetCell = None
-		for row, col in itertools.product( range( rows ), range( cols ) ):
-			if mazeLayout[ row ][ col ] == self.startCellToken:
-				self.startCell = (row, col)
-			elif mazeLayout[ row ][ col ] == self.targetCellToken:
-				self.targetCell = (row, col)
+		
+		self.startCellList = list()
+		self.targetCellList = list()
+
+		self.populateStartAndTargetCellList()
 
 		self.allowedMoves = Movement.horizontalOrVerticalMoves
 		self.adjacentStateFilterFunc = lambda currentState, newSearchState : True
+
+		self.targetState = self.getTargetStateRollingBlock()
+
+	def populateStartAndTargetCellList( self ):
+		for row, col in itertools.product( range( self.rows ), range( self.cols ) ):
+			if self.mazeLayout[ row ][ col ] == self.startCellToken:
+				self.startCellList.append( (row, col) )
+			elif self.mazeLayout[ row ][ col ] == self.targetCellToken:
+				self.targetCellList.append( (row, col) )
 
 	def applyMoves( self, directionTagList ):
 		rollingBlock = self.getStartStateRollingBlock()
@@ -103,7 +110,7 @@ class RollingBlockMaze( StateSpaceSearch, BaseMazeInterface ):
 			if not all( map( self.isCellEmpty, newRollingBlock.cells() ) ):
 				return False
 			rollingBlock = newRollingBlock
-		return rollingBlock.isTargetState( self.targetCell )
+		return rollingBlock.isTargetState( self.targetState )
 
 	def isCellEmpty( self, cell ):
 		row, col = cell
@@ -124,31 +131,52 @@ class RollingBlockMaze( StateSpaceSearch, BaseMazeInterface ):
 	def getCacheEntryFromSearchState( self, searchState ):
 		return searchState.rollingBlock.occupiedCells
 
+	def getOccupiedCells( self, cellList ):
+		N = len( cellList )
+		assert N in (1, 2)
+		
+		# N = 1 for vertical orientation, and 2 for horizontal orientation.
+		
+		cellList.sort()
+		if N == 1:
+			x, y = cellList[ -1 ]
+			cell1, cell2 = (x, y, 0), (x, y, 1)
+		else:
+			(x1, y1), (x2, y2) = cellList
+			cell1, cell2 = (x1, y1, 0), (x2, y2, 0)
+		return (cell1, cell2)
+
 	def getStartStateRollingBlock( self ):
-		x, y = self.startCell
-		# Initial orientation is vertical - hence the occupied cell list has two cells with
-		# x and y positions equal to the startCell, but with z position equal to 0 and 1 respectively.
-		cell1, cell2 = (x, y, 0), (x, y, 1)
-		occupiedCells = (cell1, cell2)
-		return RollingBlock_2_1_1( occupiedCells )
+		return RollingBlock_2_1_1( self.getOccupiedCells( self.startCellList ) )
+
+	def getTargetStateRollingBlock( self ):
+		return self.getOccupiedCells( self.targetCellList )
 
 	def getStartState( self ):
 		rollingBlock = self.getStartStateRollingBlock()
 		return RollingBlockSearchState( previousMove=None, previousState=None, rollingBlock=rollingBlock )
 
 	def isTargetState( self, currentState ):
-		return currentState.isTargetState( self.targetCell )
+		return currentState.isTargetState( self.targetState )
 
 	def solve( self ):
 		searchState = self.breadthFirstSearch()
 		pathString, _ = self.getPath( searchState, separator=str() )
 		return pathString
 
+	@staticmethod
+	def read( mazeName, filePath ):
+		rawMazeLayout = list()
+		with open( filePath ) as inputFile:
+			for inputLine in inputFile.readlines():
+				rawMazeLayout.append( inputLine.strip() )
+		return RollingBlockMaze( rawMazeLayout, mazeName )
+
 class RollingBlockMazeColor( RollingBlockMaze ):
 	def __init__( self, mazeLayout, mazeName, startCellId, targetCellId ):
+		self.startCellId, self.targetCellId = startCellId, targetCellId
+		
 		RollingBlockMaze.__init__( self, mazeLayout, mazeName )
-		self.startCell = self.convertCellNumber( startCellId )
-		self.targetCell = self.convertCellNumber( targetCellId )
 
 		def adjacentStateFilterFunc( currentState, newSearchState ):
 			allCells = newSearchState.rollingBlock.cells()
@@ -159,8 +187,12 @@ class RollingBlockMazeColor( RollingBlockMaze ):
 
 		self.adjacentStateFilterFunc = adjacentStateFilterFunc
 
-	@classmethod
-	def read( self, mazeName, filePath ):
+	def populateStartAndTargetCellList( self ):
+		self.startCellList.append( self.convertCellNumber( self.startCellId ) )
+		self.targetCellList.append( self.convertCellNumber( self.targetCellId ) )
+
+	@staticmethod
+	def read( mazeName, filePath ):
 		rawMazeLayout = list()
 		with open( filePath ) as inputFile:
 			_, _, startCellId = inputFile.readline().strip().split()
@@ -170,22 +202,16 @@ class RollingBlockMazeColor( RollingBlockMaze ):
 		return RollingBlockMazeColor( rawMazeLayout, mazeName, int( startCellId ), int( targetCellId ) )
 
 class RollingBlockMazeTest( unittest.TestCase ):
-	def _readRollingBlockMaze( self, mazeName ):
-		rawMazeLayout = list()
-		with open( 'tests/RollingMaze/{}'.format( mazeName ) ) as inputFile:
-			for inputLine in inputFile.readlines():
-				rawMazeLayout.append( inputLine.strip() )
-		return rawMazeLayout
-
 	def _readRollingBlockMazeSolution( self, mazeName ):
 		with open( 'tests/RollingMaze/{}.ans'.format( mazeName ) ) as solutionFile:
 			pathString = solutionFile.readline().strip()
 		return pathString
 
 	def test_RollingBlockMaze( self ):
-		for mazeName in ('RollingMaze1', 'RollingMaze2', 'RollingMaze3', 'RollingMaze4'):
-			mazeLayout = self._readRollingBlockMaze( mazeName )
-			maze = RollingBlockMaze( self._readRollingBlockMaze( mazeName ), mazeName=mazeName )
+		mazeNameList = [ 'RollingMaze{}'.format( i + 1 ) for i in range( 4 ) ]
+		for mazeName in mazeNameList:
+			filePath = 'tests/RollingMaze/{}'.format( mazeName )
+			maze = RollingBlockMaze.read( mazeName, filePath )
 			expectedPathString = self._readRollingBlockMazeSolution( mazeName )
 
 			pathString = maze.solve()
@@ -195,7 +221,7 @@ class RollingBlockMazeTest( unittest.TestCase ):
 				self.assertEqual( maze.applyMoves( pathString ), True )
 
 	def test_RollingBlockMazeColor( self ):
-		mazeNameList = [ 'RollingMazeColor{}'.format( i + 1 ) for i in range( 9 ) ]
+		mazeNameList = [ 'RollingMazeColor{}'.format( i + 1 ) for i in range( 10 ) ]
 		for mazeName in mazeNameList:
 			filePath = 'tests/RollingMaze/{}'.format( mazeName )
 			maze = RollingBlockMazeColor.read( mazeName, filePath )
