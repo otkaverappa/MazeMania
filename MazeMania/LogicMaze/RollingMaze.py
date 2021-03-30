@@ -208,7 +208,7 @@ class RollingBlockMazeTest( unittest.TestCase ):
 		return pathString
 
 	def test_RollingBlockMaze( self ):
-		mazeNameList = [ 'RollingMaze{}'.format( i + 1 ) for i in range( 4 ) ]
+		mazeNameList = [ 'RollingMaze{}'.format( i + 1 ) for i in range( 5 ) ]
 		for mazeName in mazeNameList:
 			filePath = 'tests/RollingMaze/{}'.format( mazeName )
 			maze = RollingBlockMaze.read( mazeName, filePath )
