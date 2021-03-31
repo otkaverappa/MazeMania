@@ -128,21 +128,16 @@ class ChessAvoidance:
 		for cell in list( emptyCells ):
 			attackedCells = ChessPiece.positionsAttacked( chessPieceToPlace, cell, self.dimension )
 			if len( set.intersection( attackedCells, occupiedCells ) ) == 0:
-				# We can place the chess piece at this location.
-				emptyCells.remove( cell )
-				cellsToRemoveFromEmptyCells = set.intersection( emptyCells, attackedCells )
-				for cellToRemove in cellsToRemoveFromEmptyCells:
-					emptyCells.remove( cellToRemove )
+				# We can place the chess piece at this location. Remove attackedCells as well
+				# as the current cell from emptyCells.
+				attackedCells.add( cell )
+				newEmptyCells = set.difference( emptyCells, attackedCells )
 				
 				chessPiecesPlacedDict[ cell ] = chessPieceToPlace
-				searchSuccessful = self._search( chessPieceIndex + 1, emptyCells, chessPiecesPlacedDict )
+				searchSuccessful = self._search( chessPieceIndex + 1, newEmptyCells, chessPiecesPlacedDict )
 				if searchSuccessful:
 					return True
-				del chessPiecesPlacedDict[ cell ]
-				
-				for cellToRemove in cellsToRemoveFromEmptyCells:
-					emptyCells.add( cellToRemove )
-				emptyCells.add( cell )
+				del chessPiecesPlacedDict[ cell ]				
 		return False
 
 	def avoid( self ):
@@ -165,10 +160,9 @@ class ChessAvoidance:
 		return avoidanceBoard
 
 class ChessAvoidanceTest( unittest.TestCase ):
-	def _render( self, avoidanceBoard ):
-		for rowString in avoidanceBoard:
-			print( rowString )
-		print()
+	def _verify( self, board, chessPieceInfoString, expectedAvoidanceBoard ):
+		avoidanceBoard = ChessAvoidance( board, chessPieceInfoString ).avoid()
+		self.assertEqual( avoidanceBoard, expectedAvoidanceBoard )
 
 	def test_ChessAvoidance( self ):
 		board = [
@@ -176,29 +170,34 @@ class ChessAvoidanceTest( unittest.TestCase ):
 		'....',
 		'....'
 		]
-
-		avoidanceBoard = ChessAvoidance( board, 'BBBBQ' ).avoid()
-		expectedAvoidanceBoard = [
-		'#.BB',
-		'Q...',
-		'..BB'
+		chessPieceInfoStringList = [ 'BBBBQ', 'KKkkR', 'BBKKkk' ]
+		expectedAvoidanceBoardList = [
+		[ '#.BB', 'Q...', '..BB' ],
+		[ '#k.K', 'R...', '.k.K' ],
+		[ '#K.K', '....', 'BkBk' ]
 		]
-		self.assertEqual( avoidanceBoard, expectedAvoidanceBoard )
 
-		avoidanceBoard = ChessAvoidance( board, 'KKkkR' ).avoid()
-		self._render( avoidanceBoard )
-
-		avoidanceBoard = ChessAvoidance( board, 'BBKKkk' ).avoid()
-		self._render( avoidanceBoard )
+		for chessPieceInfoString, expectedAvoidanceBoard in zip( chessPieceInfoStringList, expectedAvoidanceBoardList ):
+			self._verify( board, chessPieceInfoString, expectedAvoidanceBoard )
 
 		board = [
 		'#..##',
 		'.....',
 		'.....'
 		]
-		for chessPieceInfoString in ('BkQQ', 'KkQR', 'kkkK', 'kkkRR', 'BKKkQ', 'BBBBkk', 'BBBKkR'):
-			avoidanceBoard = ChessAvoidance( board, chessPieceInfoString ).avoid()
-			self._render( avoidanceBoard )
+		chessPieceInfoStringList = [ 'BkQQ', 'KkQR', 'kkkQ', 'kkkRR', 'BKKkQ', 'BBBBkk', 'BBBKkR' ]
+		expectedAvoidanceBoardList = [
+		[ '#Q.##', '...Bk', 'Q....' ],
+		[ '#Q.##', '...R.', 'K...k' ],
+		[ '#k.##', 'kk...', '....Q' ],
+		[ '#R.##', 'k.k.k', '...R.' ],
+		[ '#Q.##', '....B', 'K.K.k' ],
+		[ '#B.##', '....B', 'BkB.k' ],
+		[ '#K.##', '....R', 'BBBk.' ]
+		]
+
+		for chessPieceInfoString, expectedAvoidanceBoard in zip( chessPieceInfoStringList, expectedAvoidanceBoardList ):
+			self._verify( board, chessPieceInfoString, expectedAvoidanceBoard )
 
 		board = [
 		'#...',
@@ -206,18 +205,34 @@ class ChessAvoidanceTest( unittest.TestCase ):
 		'#...',
 		'....'
 		]
-		for chessPieceInfoString in ('KkQQ', 'BKkkQ', 'KKkRR', 'KKKkkk', 'BBBBBkk'):
-			avoidanceBoard = ChessAvoidance( board, chessPieceInfoString ).avoid()
-			self._render( avoidanceBoard )
-
+		chessPieceInfoStringList = [ 'KkQQ', 'BKkkQ', 'KKkRR', 'KKKkkk', 'BBBBBkk' ]
+		expectedAvoidanceBoardList = [
+		[ '#Q..', '#..Q', '#...', 'k.K.' ],
+		[ '#Q..', '#..K', '#...', 'k.Bk' ],
+		[ '#..K', '#R..', '#.R.', 'K..k' ],
+		[ '#K.K', '#...', '#..k', 'K.kk' ],
+		[ '#BBk', '#...', '#...', 'kBBB' ]
+		]
+		
+		for chessPieceInfoString, expectedAvoidanceBoard in zip( chessPieceInfoStringList, expectedAvoidanceBoardList ):
+			self._verify( board, chessPieceInfoString, expectedAvoidanceBoard )
+		
 		board = [
 		'#....',
 		'.....',
 		'.....'
 		]
-		for chessPieceInfoString in ('KKkkQ', 'BBBkkR', 'KKkkkR', 'BBBBkR', 'BBkkkkR'):
-			avoidanceBoard = ChessAvoidance( board, chessPieceInfoString ).avoid()
-			self._render( avoidanceBoard )
+		chessPieceInfoStringList = [ 'KKkkQ', 'BBBkkR', 'KKkkkR', 'BBBBkR', 'BBkkkkR' ]
+		expectedAvoidanceBoardList = [
+		[ '#.K.k', 'Q....', '..K.k' ],
+		[ '#B..k', '...R.', 'BB..k' ],
+		[ '#.k.K', '.R...', 'k.k.K' ],
+		[ '#..BB', '.R...', 'k..BB' ],
+		[ '#.R..', 'Bk.kB', 'k...k' ]
+		]
+		
+		for chessPieceInfoString, expectedAvoidanceBoard in zip( chessPieceInfoStringList, expectedAvoidanceBoardList ):
+			self._verify( board, chessPieceInfoString, expectedAvoidanceBoard )
 
 if __name__ == '__main__':
 	unittest.main()
