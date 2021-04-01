@@ -366,13 +366,113 @@ class ChessPathTest( unittest.TestCase ):
 
 class RookEndMaze:
 	def __init__( self, board ):
-		pass
+		self.directionDiff = {
+		'N' : (-1, 0), 'S' : (1, 0), 'E' : (0, 1), 'W' : (0, -1)
+		}
+		self.turnLeft = {
+		'N' : 'W', 'W' : 'S', 'S' : 'E', 'E' : 'N'
+		}
+		self.turnRight = {
+		'N' : 'E', 'E' : 'S', 'S' : 'W', 'W' : 'N'
+		}
+
+		self.rows, self.cols = len( board ), len( board[ 0 ] )
+		self.board = board
+		self.startCell = self.targetCell = None
+		for (row, col) in itertools.product( range( self.rows ), range( self.cols ) ):
+			token = board[ row ][ col ]
+			if token == 'S':
+				self.startCell = (row, col)
+			elif token == 'F':
+				self.targetCell = (row, col)
+		assert self.startCell is not None and self.targetCell is not None
+
+		self.emptyCellToken, self.blockedCellToken = '.', '#'
+
+	def _deadEnd( self, cell, visited ):
+		for directionToken in self.directionDiff.keys():
+			newCell = self._moveInDirection( cell, directionToken )
+			if not self._isBlocked( newCell, visited ):
+				return False
+		return True
+
+	def _moveInDirection( self, cell, directionToken ):
+		u, v = cell
+		du, dv = self.directionDiff[ directionToken ]
+		return u + du, v + dv
+
+	def _isBlocked( self, cell, visited ):
+		u, v = cell
+		return not 0 <= u < self.rows or not 0 <= v < self.cols or self.board[ u ][ v ] == self.blockedCellToken or \
+		       cell in visited
+
+	def _search( self, currentCell, currentDirection, visited, pathTokenList ):
+		if currentDirection is None:
+			u, v = currentCell
+			for direction, (du, dv) in self.directionDiff.items():
+				cell = u + du, v + dv
+				if self._isBlocked( cell, visited ):
+					continue
+				
+				pathTokenList.append( direction )
+				pathFound = self._search( currentCell, direction, visited, pathTokenList )
+				if pathFound:
+					return True
+				pathTokenList.pop()
+			return False
+
+		if currentCell == self.targetCell:
+			# The targetCell should be a dead-end; i.e. no moves should be possible from the targetCell.
+			return self._deadEnd( currentCell, visited )
+
+		# Attempt to move in the direction specified by directionToken.
+		newCell = self._moveInDirection( currentCell, currentDirection )
+		if not self._isBlocked( newCell, visited ):
+			visited.add( newCell )
+			
+			pathFound = self._search( newCell, currentDirection, visited, pathTokenList )
+			if pathFound:
+				return True
+			
+			visited.remove( newCell )
+			
+			return False
+
+		# We can move left or right.
+		leftTurnDirection, rightTurnDirection = self.turnLeft[ currentDirection ], self.turnRight[ currentDirection ]
+		
+		for direction in (leftTurnDirection, rightTurnDirection):
+			newCell = self._moveInDirection( currentCell, direction )
+			if not self._isBlocked( newCell, visited ):
+				visited.add( newCell )
+				pathTokenList.append( direction )
+				
+				pathFound = self._search( newCell, direction, visited, pathTokenList )
+				if pathFound:
+					return True
+				
+				pathTokenList.pop()
+				visited.remove( newCell )
+		return False
 
 	def path( self ):
-		pass
+		initialDirection = None
+		visited = set()
+		visited.add( self.startCell )
+
+		pathTokenList = list()
+
+		self._search( self.startCell, initialDirection, visited, pathTokenList )
+
+		return ''.join( pathTokenList )
 
 class RookEndMazeTest( unittest.TestCase ):
 	def test_RookEndMaze( self ):
+		solutionList = list()
+		with open( 'tests/RookEndMaze.ans' ) as solutionFile:
+			for solutionLine in solutionFile.readlines():
+				solutionList.append( solutionLine.strip() )
+
 		index = 0
 		with open( 'tests/RookEndMaze' ) as inputFile:
 			while True:
@@ -380,10 +480,11 @@ class RookEndMazeTest( unittest.TestCase ):
 				if rows == cols == 0:
 					break
 
+				expectedPath = solutionList[ index ]
 				index += 1
 
-				print( 'Testcase #{} rows = {} cols = {}'.format( index, rows, cols ) )
-				RookEndMaze( board ).path()
+				print( 'Testcase #{} rows = {} cols = {} Expected path = {}'.format( index, rows, cols, expectedPath ) )
+				self.assertEqual( RookEndMaze( board ).path(), expectedPath )
 
 if __name__ == '__main__':
 	unittest.main()
