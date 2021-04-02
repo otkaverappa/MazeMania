@@ -486,5 +486,114 @@ class RookEndMazeTest( unittest.TestCase ):
 				print( 'Testcase #{} rows = {} cols = {} Expected path = {}'.format( index, rows, cols, expectedPath ) )
 				self.assertEqual( RookEndMaze( board ).path(), expectedPath )
 
+class FullQueenMaze:
+	def __init__( self, board ):
+		self.rows, self.cols = len( board ), len( board[ 0 ] )
+		self.board = board
+
+		self.emptyCellToken, self.blockedCellToken = '.', '#'
+		self.startCellToken = 'S'
+
+		self.startCell = None
+		self.totalEmptyCells = 0
+		for row, col in itertools.product( range( self.rows ), range( self.cols ) ):
+			if board[ row ][ col ] == self.startCellToken:
+				self.startCell = (row, col)
+			elif board[ row ][ col ] == self.emptyCellToken:
+				self.totalEmptyCells += 1
+
+		self.scanDirectionDict = {
+		'N' : (-1, 0), 'S' : (1, 0), 'E' : (0, 1), 'W' : (0, -1), 'NE' : (-1, 1), 'NW' : (-1, -1), 'SE' : (1, 1), 'SW' : (1, -1)
+		}
+		self.oppositeDirectionDict = {
+		'N' : 'S', 'S' : 'N', 'E' : 'W', 'W' : 'E', 'NE' : 'SW', 'SW' : 'NE', 'NW' : 'SE', 'SE' : 'NW'
+		}
+
+	def _moveInDirection( self, cell, direction ):
+		row, col = cell
+		du, dv = self.scanDirectionDict[ direction ]
+		return row + du, col + dv
+
+	def _isBlocked( self, cell, visited ):
+		u, v = cell
+		return not 0 <= u < self.rows or not 0 <= v < self.cols or self.board[ u ][ v ] == self.blockedCellToken or \
+		       cell in visited
+
+	def _search( self, currentCell, currentDirection, emptyCellsToVisit, visited, pathList ):
+		if emptyCellsToVisit == 0:
+			# We have visited all empty cells.
+			return True
+
+		if currentDirection is None:
+			visited.add( currentCell )
+			pathList.append( currentCell )
+			for direction in self.scanDirectionDict.keys():
+				pathFound = self._search( currentCell, direction, emptyCellsToVisit, visited, pathList )
+				if pathFound:
+					return True
+			pathList.pop()
+			visited.remove( currentCell )
+			return False
+
+		# Attempt to move in the currentDirection.
+		newCell = self._moveInDirection( currentCell, currentDirection )
+		if not self._isBlocked( newCell, visited ):
+			visited.add( newCell )
+			pathList.append( newCell )
+			pathFound = self._search( newCell, currentDirection, emptyCellsToVisit - 1, visited, pathList )
+			if pathFound:
+				return True
+			pathList.pop()
+			visited.remove( newCell )
+			return False
+
+		oppositeDirection = self.oppositeDirectionDict[ currentDirection ]
+		possibleDirections = set.difference( set( self.scanDirectionDict.keys() ), set( [ currentDirection, oppositeDirection ] ) )
+
+		for direction in possibleDirections:
+			newCell = self._moveInDirection( currentCell, direction )
+			if not self._isBlocked( newCell, visited ):
+				visited.add( newCell )
+				pathList.append( newCell )
+				pathFound = self._search( newCell, direction, emptyCellsToVisit - 1, visited, pathList )
+				if pathFound:
+					return True
+				pathList.pop()
+				visited.remove( newCell )
+		return False
+
+	def _convertToCellId( self, cell ):
+		row, col = cell
+		return row * self.cols + col + 1
+
+	def path( self ):
+		visited = set()
+
+		initialDirection = None
+		pathList = list()
+		self._search( self.startCell, initialDirection, self.totalEmptyCells, visited, pathList )
+
+		return list( map( self._convertToCellId, pathList ) )
+
+class FullQueenMazeTest( unittest.TestCase ):
+	def test_FullQueenMaze( self ):
+		solutionList = list()
+		with open( 'tests/FullQueenMaze.ans' ) as solutionFile:
+			for solutionLine in solutionFile.readlines():
+				solutionList.append( list( map( int, solutionLine.strip().split() ) ) )
+
+		index = 0
+		with open( 'tests/FullQueenMaze' ) as inputFile:
+			while True:
+				rows, cols, board = BoardReader.read( inputFile )
+				if rows == cols == 0:
+					break
+
+				expectedPath = solutionList[ index ]
+				index += 1
+
+				print( 'Testcase #{} rows = {} cols = {} Expected path = {}'.format( index, rows, cols, expectedPath ) )
+				self.assertEqual( FullQueenMaze( board ).path(), expectedPath )
+
 if __name__ == '__main__':
 	unittest.main()
