@@ -179,11 +179,16 @@ class ArrowMaze( StateSpaceSearch, Maze ):
 		self.arrowMovementCode = copy.deepcopy( Movement.horizontalOrVerticalMovementCode )
 		self.arrowMovementCode.update( Movement.diagonalMovementCode )
 
+		self.reflectorToken = 'O'
+
 	def getAdjacentStateList( self, currentState ):
 		adjacentStateList = list()
 
 		row, col = currentState.cell
 		moveCode = self.mazeLayout.getRaw( row, col )
+		if moveCode == self.reflectorToken:
+			previousMoveCode = currentState.previousMove.moveCode
+			moveCode = Movement.oppositeDirectionDict[ previousMoveCode ]
 		du, dv = self.arrowMovementCode[ moveCode ] 
 		
 		distance = 1
@@ -208,6 +213,16 @@ class ArrowMaze( StateSpaceSearch, Maze ):
 
 	def solve( self ):
 		return self.breadthFirstSearch()
+
+class ArrowMazeReflector( ArrowMaze ):
+	def __init__( self, mazeLayout, mazeName=None ):
+		ArrowMaze.__init__( self, mazeLayout, mazeName )
+
+	def getCacheEntryFromSearchState( self, searchState ):
+		moveCode = None
+		if searchState.previousMove is not None:
+			moveCode = searchState.previousMove.moveCode
+		return (searchState.cell, moveCode)
 
 class SequenceMove( Move ):
 	def __init__( self, moveCode, moveDistance, sequenceCount=1 ):
@@ -363,20 +378,15 @@ class LinkMazeAlternateShapeColorNoUTurn( LinkMaze ):
 		parentFilterFunc = self.adjacentStateFilterFunc
 
 		def adjacentStateFilterFunc( currentState, newSearchState ):
-			isUTurnMove = not filterUTurnMove( currentState, newSearchState )
-			if isUTurnMove:
-				return False
-			return parentFilterFunc( currentState, newSearchState )
+			return parentFilterFunc( currentState, newSearchState ) and filterUTurnMove( currentState, newSearchState )
 
 		self.adjacentStateFilterFunc = adjacentStateFilterFunc
 
 	def getCacheEntryFromSearchState( self, searchState ):
 		previousCell = None
-		shapeMatch = colorMatch = None
 		if searchState.previousMove is not None:
 			previousCell = searchState.previousState.cell
-			shapeMatch, colorMatch = searchState.previousMove.matchType
-		return (searchState.cell, previousCell, shapeMatch, colorMatch)
+		return (previousCell, searchState.cell)
 
 class LinkMazeSwitchShapeColor( LinkMaze ):
 	def __init__( self, mazeLayout, mazeName=None ):
@@ -652,7 +662,7 @@ class CalculationMazeNoUTurn( CalculationMaze ):
 		self.adjacentStateFilterFunc = filterUTurnMove
 
 class MazeTest( unittest.TestCase ):
-	def _verifyMaze( self, maze ):
+	def __verifyMaze( self, maze ):
 		expectedPathList = readMazeSolutionFromFile( maze.getMazeName() )
 
 		searchState = maze.solve()
@@ -664,97 +674,113 @@ class MazeTest( unittest.TestCase ):
 		self.assertEqual( pathList, expectedPathList )
 		print()
 
+	def _verifyMaze( self, mazeName, constructorFunc ):
+		maze = constructorFunc( readMazeFromFile( mazeName ), mazeName=mazeName )
+		self.__verifyMaze( maze )
+
 	def test_CalculationMaze( self ):
 		for mazeName, target in (('KeyToTheDoor', 21), ):
-			self._verifyMaze( CalculationMaze( readMazeFromFile( mazeName ), mazeName=mazeName, target=target ) )
+			self.__verifyMaze( CalculationMaze( readMazeFromFile( mazeName ), mazeName=mazeName, target=target ) )
 
 		for mazeName, target in (('TopTen', 10), ):
-			self._verifyMaze( CalculationMazeNoUTurn( readMazeFromFile( mazeName ), mazeName=mazeName, target=target ) )
+			self.__verifyMaze( CalculationMazeNoUTurn( readMazeFromFile( mazeName ), mazeName=mazeName, target=target ) )
 
 	def test_LinkMaze( self ):
-		for mazeName in ('DaisyChain', 'Ladder'):
-			self._verifyMaze( LinkMaze( readMazeFromFile( mazeName ), mazeName=mazeName ) )
-
-		for mazeName in ('Skeetology', 'ThreeByThree'):
-			self._verifyMaze( LinkMazeSwitchDiagonal( readMazeFromFile( mazeName ), mazeName=mazeName ) )
-
-		for mazeName in ('Linkology', ):
-			self._verifyMaze( LinkMazeWildcard( readMazeFromFile( mazeName ), mazeName=mazeName ) )
+		linkMazeDict = {
+		'DaisyChain'   : LinkMaze,
+		'Ladder'       : LinkMaze,
+		'Skeetology'   : LinkMazeSwitchDiagonal,
+		'ThreeByThree' : LinkMazeSwitchDiagonal,
+		'Linkology'    : LinkMazeWildcard,
+		'Linkholes'    : LinkMazeAlternateShapeColor,
+		'Jingo'        : LinkMazeAlternateShapeColor,
+		'Jango'        : LinkMazeAlternateShapeColor,
+		'Slinky'       : LinkMazeAlternateShapeColor,
+		'BowTie'       : LinkMazeAlternateShapeColorNoUTurn,
+		'MirrorMirror' : LinkMazeDiagonal,
+		'Circulate'    : LinkMazeAlternatePlainCircle,
+		'FlipFlop'     : LinkMazeSwitchShapeColor,
+		'Banana'       : LinkMazeNoUTurn,
+		'DoubleDiamond': LinkMazeNoUTurn,
+		'Miniminx'     : LinkMazeSwitchDiagonalNoUTurn,
+		}
+		for mazeName, constructorFunc in linkMazeDict.items():
+			self._verifyMaze( mazeName, constructorFunc )
 
 		# Multiple solutions for Caterpillar
-		for mazeName in ('Linkholes', 'Jingo', 'Jango', 'Slinky'):
-			self._verifyMaze( LinkMazeAlternateShapeColor( readMazeFromFile( mazeName ), mazeName=mazeName ) )
-
-		for mazeName in ('BowTie', ):
-			self._verifyMaze( LinkMazeAlternateShapeColorNoUTurn( readMazeFromFile( mazeName ), mazeName=mazeName ) )
-
-		for mazeName in ('MirrorMirror', ):
-			self._verifyMaze( LinkMazeDiagonal( readMazeFromFile( mazeName ), mazeName=mazeName ) )
-
-		for mazeName in ('Circulate', ):
-			self._verifyMaze( LinkMazeAlternatePlainCircle( readMazeFromFile( mazeName ), mazeName=mazeName ) )
-
-		for mazeName in ('FlipFlop', ):
-			self._verifyMaze( LinkMazeSwitchShapeColor( readMazeFromFile( mazeName ), mazeName=mazeName ) )
-
-		for mazeName in ('Banana', 'DoubleDiamond'):
-			self._verifyMaze( LinkMazeNoUTurn( readMazeFromFile( mazeName ), mazeName=mazeName ) )
-
-		for mazeName in ('Miniminx', ):
-			self._verifyMaze( LinkMazeSwitchDiagonalNoUTurn( readMazeFromFile( mazeName ), mazeName=mazeName ) )
 
 	def test_ChessMaze( self ):
-		for mazeName in ('FourKings', 'Chess77', 'BishopCastleKnight'):
-			self._verifyMaze( ChessMaze( readMazeFromFile( mazeName ), mazeName=mazeName ) )
-
 		# Multiple solutions for ChessMoves and TheCastle.
 		for mazeName in ('ChessMoves', ):
 			pass
 
-		for mazeName in ('KnightsCircle', 'ThreeKings', 'Whirlpool', 'KnightAndDay', 'TheCastle', 'Greyknights'):
-			self._verifyMaze( ChessMazeDifferentColor( readMazeFromFile( mazeName ), mazeName=mazeName ) )
-
-		for mazeName in ('Cuckoo', 'Chessopolis', 'Chameleon', 'Mimic', 'Chessmaster'):
-			self._verifyMaze( ChessMazeWildcard( readMazeFromFile( mazeName ), mazeName=mazeName ) )
-
-		for mazeName in ('Chesapeake', 'TreasureChess', 'TheDarkKnight'):
-			self._verifyMaze( ChessMazeFlipFlop( readMazeFromFile( mazeName ), mazeName=mazeName ) )
+		chessMazeDict = {
+		'FourKings'         : ChessMaze,
+		'Chess77'           : ChessMaze,
+		'BishopCastleKnight': ChessMaze,
+		'KnightsCircle'     : ChessMazeDifferentColor,
+		'ThreeKings'        : ChessMazeDifferentColor,
+		'Whirlpool'         : ChessMazeDifferentColor,
+		'KnightAndDay'      : ChessMazeDifferentColor,
+		'TheCastle'         : ChessMazeDifferentColor,
+		'Greyknights'       : ChessMazeDifferentColor,
+		'Cuckoo'            : ChessMazeWildcard,
+		'Chessopolis'       : ChessMazeWildcard,
+		'Chameleon'         : ChessMazeWildcard,
+		'Mimic'             : ChessMazeWildcard,
+		'Chessmaster'       : ChessMazeWildcard,
+		'Chesapeake'        : ChessMazeFlipFlop,
+		'TreasureChess'     : ChessMazeFlipFlop,
+		'TheDarkKnight'     : ChessMazeFlipFlop,
+		}
+		for mazeName, constructorFunc in chessMazeDict.items():
+			self._verifyMaze( mazeName, constructorFunc )
 
 	def test_ArrowMaze( self ):
-		for mazeName in ('ArrowTheorem', ):
-			self._verifyMaze( ArrowMaze( readMazeFromFile( mazeName ), mazeName=mazeName ) )
+		arrowMazeDict = {
+		'ArrowTheorem' : ArrowMaze,
+		'Billiards'    : ArrowMazeReflector,
+		'Pinball'      : ArrowMazeReflector,
+		'Fourpins'     : ArrowMazeReflector,
+		}
+		for mazeName, constructorFunc in arrowMazeDict.items():
+			self._verifyMaze( mazeName, constructorFunc )
 
 	def test_JumpMaze( self ):
-		for mazeName in ('ChainReaction', 'Hopscotch'):
-			self._verifyMaze( JumpingMaze( readMazeFromFile( mazeName ), mazeName=mazeName ) )
+		jumpMazeDict = {
+		'ChainReaction' : JumpingMaze,
+		'Hopscotch'     : JumpingMaze,
+		'Bumblebee'     : JumpingMazeDiagonal,
+		'DizzyDiagonals': JumpingMazeDiagonal,
+		'SwitchMiss'    : JumpingMazeSwitchDiagonal,
+		'Horizon'       : JumpingMazeSwitchDiagonal,
+		'OneTwoThree'   : JumpingMazeSwitchDiagonal,
+		'Lightswitch'   : JumpingMazeSwitchDiagonal,
+		'Twangle'       : JumpingMazeToggleDirection,
+		'Triangle'      : JumpingMazeToggleDirection,
+		'Tangle'        : JumpingMazeToggleDirection,
+		'Switchblade'   : JumpingMazeToggleDirection,
+		'Megaminx'      : JumpingMazeToggleDirection,
+		'Reflex'        : JumpingMazeNoUTurn,
+		'Noun'          : JumpingMazeNoUTurn,
+		'Grumble'       : JumpingMazeWildcard,
+		'DNA'           : JumpingMazeWildcard,
+		'Countdown'     : JumpingMazeWildcard,
+		'Transverse'    : JumpingMazeWildcard,
+		'Asterisks'     : JumpingMazeWildcard,
+		'Coriolis'      : JumpingMazeWildcard,
+		'Kangaroo'      : JumpingMazeToggleDiagonalWildcard,
+		'Zig-Zag'       : JumpingMazeSwitchDiagonalWildcard,
+ 		}
+		for mazeName, constructorFunc in jumpMazeDict.items():
+			self._verifyMaze( mazeName, constructorFunc )
 
 		mazeName = 'Diamond'
 		maze = JumpingMazeDiagonal( readMazeFromFile( mazeName ), mazeName=mazeName )
 		rows, cols = maze.getDimensions()
 		startCell, targetCell = (0, cols // 2), (rows - 1, cols // 2)
 		maze.setStartAndTargetCell( startCell, targetCell )
-		self._verifyMaze( maze )
-
-		for mazeName in ('Bumblebee', 'DizzyDiagonals'):
-			self._verifyMaze( JumpingMazeDiagonal( readMazeFromFile( mazeName ), mazeName=mazeName ) )
-		
-		for mazeName in ('SwitchMiss', 'Horizon', 'OneTwoThree', 'Lightswitch'):
-			self._verifyMaze( JumpingMazeSwitchDiagonal( readMazeFromFile( mazeName ), mazeName=mazeName ) )
-
-		for mazeName in ('Twangle', 'Triangle', 'Tangle', 'Switchblade', 'Megaminx'):
-			self._verifyMaze( JumpingMazeToggleDirection( readMazeFromFile( mazeName ), mazeName=mazeName ) )
-
-		for mazeName in ('Reflex', 'Noun'):
-			self._verifyMaze( JumpingMazeNoUTurn( readMazeFromFile( mazeName ), mazeName=mazeName ) )
-
-		for mazeName in ('Grumble', 'DNA', 'Countdown', 'Transverse', 'Asterisks', 'Coriolis'):
-			self._verifyMaze( JumpingMazeWildcard( readMazeFromFile( mazeName ), mazeName=mazeName ) )
-
-		for mazeName in ('Kangaroo', ):
-			self._verifyMaze( JumpingMazeToggleDiagonalWildcard( readMazeFromFile( mazeName ), mazeName=mazeName ) )
-
-		for mazeName in ('Zig-Zag', ):
-			self._verifyMaze( JumpingMazeSwitchDiagonalWildcard( readMazeFromFile( mazeName ), mazeName=mazeName ) )
+		self.__verifyMaze( maze )
 
 if __name__ == '__main__':
 	unittest.main()
