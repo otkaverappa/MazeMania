@@ -304,7 +304,7 @@ class LinkMazeWildcard( LinkMaze ):
 
 def filterUTurnMove( currentState, newSearchState ):
 	if currentState.previousState is None:
-				return True
+		return True
 	previousMoveDirection = currentState.previousMove.moveCode
 	currentMoveDirection = newSearchState.previousMove.moveCode
 	return currentMoveDirection != Movement.oppositeDirectionDict[ previousMoveDirection ]
@@ -356,6 +356,27 @@ class LinkMazeAlternateShapeColor( LinkMaze ):
 		if searchState.previousMove is not None:
 			shapeMatch, colorMatch = searchState.previousMove.matchType
 		return (searchState.cell, shapeMatch, colorMatch)
+
+class LinkMazeAlternateShapeColorNoUTurn( LinkMaze ):
+	def __init__( self, mazeLayout, mazeName=None ):
+		LinkMazeAlternateShapeColor.__init__( self, mazeLayout, mazeName )
+		parentFilterFunc = self.adjacentStateFilterFunc
+
+		def adjacentStateFilterFunc( currentState, newSearchState ):
+			isUTurnMove = not filterUTurnMove( currentState, newSearchState )
+			if isUTurnMove:
+				return False
+			return parentFilterFunc( currentState, newSearchState )
+
+		self.adjacentStateFilterFunc = adjacentStateFilterFunc
+
+	def getCacheEntryFromSearchState( self, searchState ):
+		previousCell = None
+		shapeMatch = colorMatch = None
+		if searchState.previousMove is not None:
+			previousCell = searchState.previousState.cell
+			shapeMatch, colorMatch = searchState.previousMove.matchType
+		return (searchState.cell, previousCell, shapeMatch, colorMatch)
 
 class LinkMazeSwitchShapeColor( LinkMaze ):
 	def __init__( self, mazeLayout, mazeName=None ):
@@ -663,6 +684,9 @@ class MazeTest( unittest.TestCase ):
 		# Multiple solutions for Caterpillar
 		for mazeName in ('Linkholes', 'Jingo', 'Jango', 'Slinky'):
 			self._verifyMaze( LinkMazeAlternateShapeColor( readMazeFromFile( mazeName ), mazeName=mazeName ) )
+
+		for mazeName in ('BowTie', ):
+			self._verifyMaze( LinkMazeAlternateShapeColorNoUTurn( readMazeFromFile( mazeName ), mazeName=mazeName ) )
 
 		for mazeName in ('MirrorMirror', ):
 			self._verifyMaze( LinkMazeDiagonal( readMazeFromFile( mazeName ), mazeName=mazeName ) )
