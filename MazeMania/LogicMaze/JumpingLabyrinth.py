@@ -61,7 +61,7 @@ class JumpingLabyrinth( StateSpaceSearch, Maze ):
 		return SearchState( self.startCell, previousMove=None, previousState=None )
 
 	def isTargetState( self, currentState ):
-		return currentState.isTargetCell( self.targetCell )
+		return currentState.isTargetState( self.targetCell )
 
 	def solve( self ):
 		searchState = self.breadthFirstSearch()

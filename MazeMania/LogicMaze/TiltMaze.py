@@ -51,7 +51,7 @@ class TiltMaze( BaseMazeInterface, StateSpaceSearch ):
 		return SearchState( self.startCell, previousMove=None, previousState=None )
 
 	def isTargetState( self, currentState ):
-		return currentState.isTargetCell( self.targetCell )
+		return currentState.isTargetState( self.targetCell )
 
 	def solve( self, startCellNumber, targetCellNumber ):
 		self.startCell, self.targetCell = self._convertCellNumber( startCellNumber ), self._convertCellNumber( targetCellNumber )

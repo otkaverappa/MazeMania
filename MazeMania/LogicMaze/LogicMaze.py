@@ -176,19 +176,20 @@ class ArrowMaze( StateSpaceSearch, Maze ):
 	def __init__( self, mazeLayout, mazeName=None ):
 		Maze.__init__( self, mazeLayout, mazeName )
 
+		self.adjacentStateFilterFunc = lambda currentState, newSearchState : True
+
 		self.arrowMovementCode = copy.deepcopy( Movement.horizontalOrVerticalMovementCode )
 		self.arrowMovementCode.update( Movement.diagonalMovementCode )
 
-		self.reflectorToken = 'O'
+	def getMoveCode( self, currentState ):
+		row, col = currentState.cell
+		return self.mazeLayout.getRaw( row, col )
 
 	def getAdjacentStateList( self, currentState ):
 		adjacentStateList = list()
 
 		row, col = currentState.cell
-		moveCode = self.mazeLayout.getRaw( row, col )
-		if moveCode == self.reflectorToken:
-			previousMoveCode = currentState.previousMove.moveCode
-			moveCode = Movement.oppositeDirectionDict[ previousMoveCode ]
+		moveCode = self.getMoveCode( currentState )
 		du, dv = self.arrowMovementCode[ moveCode ] 
 		
 		distance = 1
@@ -200,7 +201,7 @@ class ArrowMaze( StateSpaceSearch, Maze ):
 			newSearchState = SearchState( adjacentCell, previousMove=move, previousState=currentState )
 			adjacentStateList.append( newSearchState )
 			distance += 1
-		return adjacentStateList
+		return filter( functools.partial( self.adjacentStateFilterFunc, currentState ), adjacentStateList )
 
 	def getCacheEntryFromSearchState( self, searchState ):
 		return searchState.cell
@@ -218,11 +219,76 @@ class ArrowMazeReflector( ArrowMaze ):
 	def __init__( self, mazeLayout, mazeName=None ):
 		ArrowMaze.__init__( self, mazeLayout, mazeName )
 
+		self.reflectorToken = 'O'
+
+	def getMoveCode( self, currentState ):
+		row, col = currentState.cell
+		moveCode = self.mazeLayout.getRaw( row, col )
+		
+		if moveCode == self.reflectorToken:
+			previousMoveCode = currentState.previousMove.moveCode
+			moveCode = Movement.oppositeDirectionDict[ previousMoveCode ]
+		return moveCode
+
 	def getCacheEntryFromSearchState( self, searchState ):
 		moveCode = None
 		if searchState.previousMove is not None:
 			moveCode = searchState.previousMove.moveCode
 		return (searchState.cell, moveCode)
+
+class ArrowMazeAlternateColor( ArrowMaze ):
+	def __init__( self, mazeLayout, mazeName=None ):
+		ArrowMaze.__init__( self, mazeLayout, mazeName )
+
+		self.circleCellToken = 'C'
+
+		def adjacentStateFilterFunc( currentState, newSearchState ):
+			currentCell, newCell = currentState.cell, newSearchState.cell
+			currentCellColor, _ = self.getColorAndCircleProperty( currentCell )
+			newCellColor, _ = self.getColorAndCircleProperty( newCell )
+			
+			return newCellColor != currentCellColor
+
+		self.adjacentStateFilterFunc = adjacentStateFilterFunc
+
+	def getColorAndCircleProperty( self, cell ):
+		row, col = cell
+		color, isCircled = None, False
+		propertyString = self.mazeLayout.getPropertyString( row, col )
+		if propertyString is not None:
+			color, * rest = propertyString.split( '#' )
+			if len( rest ) > 0:
+				isCircled = rest.pop() == self.circleCellToken
+		return color, isCircled
+
+class ArrowMazeAlternateColorSwitch( ArrowMazeAlternateColor ):
+	def __init__( self, mazeLayout, mazeName=None ):
+		ArrowMazeAlternateColor.__init__( self, mazeLayout, mazeName )	
+
+	def isFlipMove( self, currentState ):
+		if currentState.previousState is None:
+			return False
+		previousRow, previousCol = currentState.previousState.cell
+		return currentState.previousMove.moveCode != self.mazeLayout.getRaw( previousRow, previousCol )
+
+	def getMoveCode( self, currentState ):
+		row, col = currentState.cell
+		moveCode = self.mazeLayout.getRaw( row, col )
+
+		if self.isFlipMove( currentState ):
+			moveCode = Movement.oppositeDirectionDict[ moveCode ]
+
+		_, isCircled = self.getColorAndCircleProperty( currentState.cell )
+		if isCircled:
+			moveCode = Movement.oppositeDirectionDict[ moveCode ]
+
+		return moveCode
+
+	def getCacheEntryFromSearchState( self, searchState ):
+		moveCode = None
+		if searchState.previousMove is not None:
+			moveCode = searchState.previousMove.moveCode
+		return (searchState.cell, moveCode, self.isFlipMove( searchState ))
 
 class SequenceMove( Move ):
 	def __init__( self, moveCode, moveDistance, sequenceCount=1 ):
@@ -678,12 +744,14 @@ class MazeTest( unittest.TestCase ):
 		maze = constructorFunc( readMazeFromFile( mazeName ), mazeName=mazeName )
 		self.__verifyMaze( maze )
 
+	'''
 	def test_CalculationMaze( self ):
 		for mazeName, target in (('KeyToTheDoor', 21), ):
 			self.__verifyMaze( CalculationMaze( readMazeFromFile( mazeName ), mazeName=mazeName, target=target ) )
 
 		for mazeName, target in (('TopTen', 10), ):
 			self.__verifyMaze( CalculationMazeNoUTurn( readMazeFromFile( mazeName ), mazeName=mazeName, target=target ) )
+	'''
 
 	def test_LinkMaze( self ):
 		linkMazeDict = {
@@ -742,6 +810,9 @@ class MazeTest( unittest.TestCase ):
 		'Billiards'    : ArrowMazeReflector,
 		'Pinball'      : ArrowMazeReflector,
 		'Fourpins'     : ArrowMazeReflector,
+		'Apollo'       : ArrowMazeAlternateColorSwitch,
+		'PolarBear'    : ArrowMazeAlternateColor,
+		'Romeo'        : ArrowMaze,
 		}
 		for mazeName, constructorFunc in arrowMazeDict.items():
 			self._verifyMaze( mazeName, constructorFunc )
