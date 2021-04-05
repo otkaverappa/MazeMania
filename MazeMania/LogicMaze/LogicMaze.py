@@ -215,7 +215,30 @@ class ArrowMaze( StateSpaceSearch, Maze ):
 	def solve( self ):
 		return self.breadthFirstSearch()
 
-class ArrowMazeReflector( ArrowMaze ):
+class CacheCellPositionMoveCodeMixin:
+	def getCacheEntryFromSearchState( self, searchState ):
+		moveCode = None
+		if searchState.previousMove is not None:
+			moveCode = searchState.previousMove.moveCode
+		return (searchState.cell, moveCode)
+
+class ArrowMazeTwist( CacheCellPositionMoveCodeMixin, ArrowMaze ):
+	def __init__( self, mazeLayout, mazeName=None ):
+		ArrowMaze.__init__( self, mazeLayout, mazeName )
+
+		self.clockwiseTurnToken, self.antiClockwiseTurnToken = 'C', 'AC'
+
+	def getMoveCode( self, currentState ):
+		row, col = currentState.cell
+		moveCode = self.mazeLayout.getRaw( row, col )
+
+		if moveCode == self.clockwiseTurnToken:
+			moveCode = Movement.rotateRight90[ currentState.previousMove.moveCode ]
+		elif moveCode == self.antiClockwiseTurnToken:
+			moveCode = Movement.rotateLeft90[ currentState.previousMove.moveCode ]
+		return moveCode
+
+class ArrowMazeReflector( CacheCellPositionMoveCodeMixin, ArrowMaze ):
 	def __init__( self, mazeLayout, mazeName=None ):
 		ArrowMaze.__init__( self, mazeLayout, mazeName )
 
@@ -229,12 +252,6 @@ class ArrowMazeReflector( ArrowMaze ):
 			previousMoveCode = currentState.previousMove.moveCode
 			moveCode = Movement.oppositeDirectionDict[ previousMoveCode ]
 		return moveCode
-
-	def getCacheEntryFromSearchState( self, searchState ):
-		moveCode = None
-		if searchState.previousMove is not None:
-			moveCode = searchState.previousMove.moveCode
-		return (searchState.cell, moveCode)
 
 class ArrowMazeAlternateColor( ArrowMaze ):
 	def __init__( self, mazeLayout, mazeName=None ):
@@ -813,6 +830,8 @@ class MazeTest( unittest.TestCase ):
 		'Apollo'       : ArrowMazeAlternateColorSwitch,
 		'PolarBear'    : ArrowMazeAlternateColor,
 		'Romeo'        : ArrowMaze,
+		'Tartan'       : ArrowMaze,
+		'Twister'      : ArrowMazeTwist,
 		}
 		for mazeName, constructorFunc in arrowMazeDict.items():
 			self._verifyMaze( mazeName, constructorFunc )

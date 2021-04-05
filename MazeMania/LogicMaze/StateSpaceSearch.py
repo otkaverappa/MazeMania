@@ -99,6 +99,14 @@ class Movement:
 	'NW' : 'SE', 'SE' : 'NW', 'NE' : 'SW', 'SW' : 'NE'
 	}
 
+	rotateRight90 = {
+	'N' : 'E', 'E' : 'S', 'S' : 'W', 'W' : 'N', 'NE' : 'SE', 'SE' : 'SW', 'SW' : 'NW', 'NW' : 'NE'
+	}
+
+	rotateLeft90 = {
+	'N' : 'W', 'W' : 'S', 'S' : 'E', 'E' : 'N', 'NE' : 'NW', 'NW' : 'SW', 'SW' : 'SE', 'SE' : 'NE'
+	}
+
 class Move:
 	MOVE_TYPE_HORIZONTAL_OR_VERTICAL = 0
 	MOVE_TYPE_DIAGONAL = 1
