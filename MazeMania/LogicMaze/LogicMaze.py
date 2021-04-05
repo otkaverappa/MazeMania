@@ -222,14 +222,37 @@ class CacheCellPositionMoveCodeMixin:
 			moveCode = searchState.previousMove.moveCode
 		return (searchState.cell, moveCode)
 
-class FlipMoveMixin:
+class ArrowFlipMoveMixin:
 	def isFlipMove( self, currentState ):
 		if currentState.previousState is None:
 			return False
 		previousRow, previousCol = currentState.previousState.cell
 		return currentState.previousMove.moveCode != self.mazeLayout.getRaw( previousRow, previousCol )
 
-class ArrowMazeTwist( CacheCellPositionMoveCodeMixin, FlipMoveMixin, ArrowMaze ):
+	def getMoveCode( self, currentState ):
+		row, col = currentState.cell
+		moveCode = self.mazeLayout.getRaw( row, col )
+		if currentState.previousMove is not None and not self.isFlipMove( currentState ):
+			moveCode = Movement.oppositeDirectionDict[ moveCode ]
+		return moveCode
+
+	def getCacheEntryFromSearchState( self, searchState ):
+		filpMoveState = None
+		if searchState.previousMove is not None:
+			filpMoveState = self.isFlipMove( searchState )
+		return (searchState.cell, filpMoveState)
+
+class ArrowMazeCorner( ArrowMaze ):
+	def __init__( self, mazeLayout, mazeName=None ):
+		ArrowMaze.__init__( self, mazeLayout, mazeName )
+
+		self.startCell = (self.rows // 2, self.cols // 2)
+		self.cornerCellSet = set( [ (0, 0), (0, self.cols - 1), (self.rows - 1, 0), (self.rows - 1, self.cols - 1) ] )
+
+	def isTargetState( self, currentState ):
+		return currentState.cell in self.cornerCellSet
+
+class ArrowMazeTwist( ArrowFlipMoveMixin, ArrowMaze ):
 	def __init__( self, mazeLayout, mazeName=None ):
 		ArrowMaze.__init__( self, mazeLayout, mazeName )
 
@@ -251,19 +274,13 @@ class ArrowMazeTwist( CacheCellPositionMoveCodeMixin, FlipMoveMixin, ArrowMaze )
 			moveCode = searchState.previousMove.moveCode
 		return (searchState.cell, moveCode, self.isFlipMove( searchState )) 
 
-class ArrowMazeSwitch( FlipMoveMixin, ArrowMaze ):
+class ArrowMazeSwitch( ArrowFlipMoveMixin, ArrowMaze ):
 	def __init__( self, mazeLayout, mazeName=None ):
 		ArrowMaze.__init__( self, mazeLayout, mazeName )
 
-	def getMoveCode( self, currentState ):
-		row, col = currentState.cell
-		moveCode = self.mazeLayout.getRaw( row, col )
-		if currentState.previousMove is not None and not self.isFlipMove( currentState ):
-			moveCode = Movement.oppositeDirectionDict[ moveCode ]
-		return moveCode
-
-	def getCacheEntryFromSearchState( self, searchState ):
-		return (searchState.cell, self.isFlipMove( searchState ))
+class ArrowMazeCornerSwitch( ArrowFlipMoveMixin, ArrowMazeCorner ):
+	def __init__( self, mazeLayout, mazeName=None ):
+		ArrowMazeCorner.__init__( self, mazeLayout, mazeName )
 
 class ArrowMazeReflector( CacheCellPositionMoveCodeMixin, ArrowMaze ):
 	def __init__( self, mazeLayout, mazeName=None ):
@@ -305,7 +322,7 @@ class ArrowMazeAlternateColor( ArrowMaze ):
 				isCircled = rest.pop() == self.circleCellToken
 		return color, isCircled
 
-class ArrowMazeAlternateColorSwitch( FlipMoveMixin, ArrowMazeAlternateColor ):
+class ArrowMazeAlternateColorSwitch( ArrowFlipMoveMixin, ArrowMazeAlternateColor ):
 	def __init__( self, mazeLayout, mazeName=None ):
 		ArrowMazeAlternateColor.__init__( self, mazeLayout, mazeName )
 
@@ -850,9 +867,11 @@ class MazeTest( unittest.TestCase ):
 		'Fourpins'     : ArrowMazeReflector,
 		'Apollo'       : ArrowMazeAlternateColorSwitch,
 		'PolarBear'    : ArrowMazeAlternateColor,
+		'Corners'      : ArrowMazeCorner,
 		'Romeo'        : ArrowMaze,
 		'Tartan'       : ArrowMaze,
 		'Twister'      : ArrowMazeTwist,
+		'Xtreme'       : ArrowMazeCornerSwitch,
 		'Slash'        : ArrowMazeSwitch,
 		'Reversibubble': ArrowMazeSwitch,
 		'Infinity'     : ArrowMazeAlternateColorSwitch,
