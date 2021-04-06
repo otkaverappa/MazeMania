@@ -172,6 +172,11 @@ class JumpingMazeSwitchDiagonalWildcard( WildCardMixin, CacheCellPositionMoveTyp
 	def __init__( self, mazeLayout, mazeName=None ):
 		JumpingMazeSwitchDiagonal.__init__( self, mazeLayout, mazeName )
 
+class ArrowSequenceMove( Move ):
+	def __init__( self, moveCode, moveDistance, sequenceCount=1 ):
+		Move.__init__( self, moveCode, moveDistance )
+		self.sequenceCount = sequenceCount
+
 class ArrowMaze( StateSpaceSearch, Maze ):
 	def __init__( self, mazeLayout, mazeName=None ):
 		Maze.__init__( self, mazeLayout, mazeName )
@@ -185,6 +190,14 @@ class ArrowMaze( StateSpaceSearch, Maze ):
 		row, col = currentState.cell
 		return self.mazeLayout.getRaw( row, col )
 
+	def getColor( self, cell ):
+		row, col = cell
+		color = None
+		propertyString = self.mazeLayout.getPropertyString( row, col )
+		if propertyString is not None:
+			color, * _ = propertyString.split( '#' )
+		return color
+
 	def getAdjacentStateList( self, currentState ):
 		adjacentStateList = list()
 
@@ -197,7 +210,12 @@ class ArrowMaze( StateSpaceSearch, Maze ):
 			adjacentCell = u, v = row + du * distance, col + dv * distance
 			if self.isCellOutsideGrid( adjacentCell ):
 				break
-			move = Move( moveCode=moveCode, moveDistance=distance )
+			sequenceCount = 1 if currentState.previousMove is None else currentState.previousMove.sequenceCount
+			color = self.getColor( currentState.cell )
+			newColor = self.getColor( adjacentCell )
+			sequenceCount = 1 if newColor != color else sequenceCount + 1
+	
+			move = ArrowSequenceMove( moveCode=moveCode, moveDistance=distance, sequenceCount=sequenceCount )
 			newSearchState = SearchState( adjacentCell, previousMove=move, previousState=currentState )
 			adjacentStateList.append( newSearchState )
 			distance += 1
@@ -224,8 +242,6 @@ class CacheCellPositionMoveCodeMixin:
 
 class ArrowFlipMoveMixin:
 	def isFlipMove( self, currentState ):
-		if currentState.previousState is None:
-			return False
 		previousRow, previousCol = currentState.previousState.cell
 		return currentState.previousMove.moveCode != self.mazeLayout.getRaw( previousRow, previousCol )
 
@@ -270,9 +286,11 @@ class ArrowMazeTwist( ArrowFlipMoveMixin, ArrowMaze ):
 
 	def getCacheEntryFromSearchState( self, searchState ):
 		moveCode = None
+		filpMoveState = None
 		if searchState.previousMove is not None:
 			moveCode = searchState.previousMove.moveCode
-		return (searchState.cell, moveCode, self.isFlipMove( searchState )) 
+			filpMoveState = self.isFlipMove( searchState )
+		return (searchState.cell, moveCode, filpMoveState) 
 
 class ArrowMazeSwitch( ArrowFlipMoveMixin, ArrowMaze ):
 	def __init__( self, mazeLayout, mazeName=None ):
@@ -296,6 +314,36 @@ class ArrowMazeReflector( CacheCellPositionMoveCodeMixin, ArrowMaze ):
 			previousMoveCode = currentState.previousMove.moveCode
 			moveCode = Movement.oppositeDirectionDict[ previousMoveCode ]
 		return moveCode
+
+class ArrowMazeAlternateColorSequence( ArrowMaze ):
+	def __init__( self, mazeLayout, mazeName=None, maximumAllowedSequenceCount=3 ):
+		ArrowMaze.__init__( self, mazeLayout, mazeName )
+		self.maximumAllowedSequenceCount = maximumAllowedSequenceCount
+
+		self.allowedSequenceCountSet = set()
+
+		# If maximumAllowedSequenceCount is 3, we want to allow the transitions (1, 2), (2, 3), and (3, 1).
+		for i in range( 1, self.maximumAllowedSequenceCount ):
+			self.allowedSequenceCountSet.add( (i, i + 1) )
+		self.allowedSequenceCountSet.add( (self.maximumAllowedSequenceCount, 1) )
+
+		def adjacentStateFilterFunc( currentState, newSearchState ):
+			sequenceCount = 1 if currentState.previousMove is None else currentState.previousMove.sequenceCount
+			A, B = sequenceCount, newSearchState.previousMove.sequenceCount
+			if B > self.maximumAllowedSequenceCount:
+				return False
+			# The target state could have no color.
+			if self.isTargetState( newSearchState ):
+				return True
+			return (A, B) in self.allowedSequenceCountSet
+
+		self.adjacentStateFilterFunc = adjacentStateFilterFunc
+
+	def getCacheEntryFromSearchState( self, searchState ):
+		sequenceCount = None
+		if searchState.previousMove is not None:
+			sequenceCount = searchState.previousMove.sequenceCount
+		return (searchState.cell, sequenceCount)
 
 class ArrowMazeAlternateColor( ArrowMaze ):
 	def __init__( self, mazeLayout, mazeName=None ):
@@ -330,7 +378,7 @@ class ArrowMazeAlternateColorSwitch( ArrowFlipMoveMixin, ArrowMazeAlternateColor
 		row, col = currentState.cell
 		moveCode = self.mazeLayout.getRaw( row, col )
 
-		if self.isFlipMove( currentState ):
+		if currentState.previousState is not None and self.isFlipMove( currentState ):
 			moveCode = Movement.oppositeDirectionDict[ moveCode ]
 
 		_, isCircled = self.getColorAndCircleProperty( currentState.cell )
@@ -341,9 +389,11 @@ class ArrowMazeAlternateColorSwitch( ArrowFlipMoveMixin, ArrowMazeAlternateColor
 
 	def getCacheEntryFromSearchState( self, searchState ):
 		moveCode = None
+		filpMoveState = None
 		if searchState.previousMove is not None:
 			moveCode = searchState.previousMove.moveCode
-		return (searchState.cell, moveCode, self.isFlipMove( searchState ))
+			filpMoveState = self.isFlipMove( searchState )
+		return (searchState.cell, moveCode, filpMoveState)
 
 class SequenceMove( Move ):
 	def __init__( self, moveCode, moveDistance, sequenceCount=1 ):
@@ -875,6 +925,8 @@ class MazeTest( unittest.TestCase ):
 		'Slash'        : ArrowMazeSwitch,
 		'Reversibubble': ArrowMazeSwitch,
 		'Infinity'     : ArrowMazeAlternateColorSwitch,
+		'Confusion'    : ArrowMazeAlternateColorSequence,
+		'Trinity'      : ArrowMazeAlternateColorSequence,
 		'RingRoad'     : ArrowMazeAlternateColor,
 		'Tilde'        : ArrowMazeAlternateColor,
 		'RedAndBlue'   : ArrowMazeAlternateColor,
@@ -883,6 +935,10 @@ class MazeTest( unittest.TestCase ):
  		}
 		for mazeName, constructorFunc in arrowMazeDict.items():
 			self._verifyMaze( mazeName, constructorFunc )
+
+		for mazeName in ('Knotted', 'TwoStep'):
+			maze = ArrowMazeAlternateColorSequence( readMazeFromFile( mazeName ), mazeName=mazeName, maximumAllowedSequenceCount=2 )
+			self.__verifyMaze( maze )
 
 	def test_JumpMaze( self ):
 		jumpMazeDict = {

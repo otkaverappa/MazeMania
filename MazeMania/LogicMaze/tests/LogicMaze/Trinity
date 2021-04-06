@@ -1,0 +1,5 @@
+ E:B S:B SW:B SW:B  W:R
+ E:R W:B SW:B  S:B SW:R
+SE:R S:R SW:B  W:R  W:B
+NE:R E:B SW:R NW:R  N:B
+ N:R W:R  E:R  E:B    *
